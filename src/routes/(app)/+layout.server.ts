@@ -1,9 +1,11 @@
 import { requireUser } from '#lib/server/guards.js';
+import { can, siteRoleOf } from '#lib/server/permissions.js';
 import type { LayoutServerLoad } from './$types';
 
-export const load: LayoutServerLoad = (event) => {
+export const load: LayoutServerLoad = async (event) => {
 	const user = requireUser(event);
 	return {
-		user: { id: user.id, name: user.name, email: user.email, role: user.role ?? 'user' }
+		user: { id: user.id, name: user.name, email: user.email, role: siteRoleOf(user) },
+		nav: { admin: await can(user, 'admin:access') }
 	};
 };

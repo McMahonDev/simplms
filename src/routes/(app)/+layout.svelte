@@ -6,7 +6,8 @@
 
 	const links = $derived([
 		{ href: '/', label: 'Dashboard' },
-		{ href: '/courses', label: 'Courses' }
+		{ href: '/courses', label: 'Courses' },
+		...(data.nav.admin ? [{ href: '/admin', label: 'Admin' }] : [])
 	]);
 
 	function isCurrent(href: string) {
