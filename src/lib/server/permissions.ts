@@ -26,8 +26,7 @@ export const SITE_CAPABILITIES = [
 	'users:view',
 	'users:manage',
 	'categories:manage',
-	'courses:create',
-	'courses:view-all'
+	'courses:create'
 ] as const;
 
 /** Capabilities that apply within one course. */

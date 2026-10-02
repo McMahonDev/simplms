@@ -1,0 +1,78 @@
+/**
+ * Read-side progress queries shared by the course page, dashboard, and report.
+ * "Progress" for a package is the user's latest attempt (highest attempt_number).
+ */
+import { and, asc, eq, inArray } from 'drizzle-orm';
+import { db } from './index.js';
+import { type CompletionStatus, type SuccessStatus, scormAttempt, scormPackage } from './schema.js';
+
+export type AttemptSummary = {
+	packageId: string;
+	userId: string;
+	attemptNumber: number;
+	completionStatus: CompletionStatus;
+	successStatus: SuccessStatus;
+	scoreRaw: number | null;
+	totalTime: number;
+	lastAccessedAt: Date | null;
+};
+
+const attemptColumns = {
+	packageId: scormAttempt.packageId,
+	userId: scormAttempt.userId,
+	attemptNumber: scormAttempt.attemptNumber,
+	completionStatus: scormAttempt.completionStatus,
+	successStatus: scormAttempt.successStatus,
+	scoreRaw: scormAttempt.scoreRaw,
+	totalTime: scormAttempt.totalTime,
+	lastAccessedAt: scormAttempt.lastAccessedAt
+};
+
+/** Keeps only the highest attempt per (package, user). */
+function latestOnly(rows: AttemptSummary[]): Map<string, AttemptSummary> {
+	const latest = new Map<string, AttemptSummary>();
+	for (const row of rows) {
+		const key = `${row.packageId}:${row.userId}`;
+		const seen = latest.get(key);
+		if (!seen || row.attemptNumber > seen.attemptNumber) latest.set(key, row);
+	}
+	return latest;
+}
+
+export function isComplete(a: Pick<AttemptSummary, 'completionStatus' | 'successStatus'>) {
+	return a.completionStatus === 'completed' || a.successStatus === 'passed';
+}
+
+export async function listPackages(courseId: string) {
+	return db
+		.select({
+			id: scormPackage.id,
+			title: scormPackage.title,
+			version: scormPackage.version,
+			sortOrder: scormPackage.sortOrder,
+			createdAt: scormPackage.createdAt
+		})
+		.from(scormPackage)
+		.where(eq(scormPackage.courseId, courseId))
+		.orderBy(asc(scormPackage.sortOrder), asc(scormPackage.createdAt));
+}
+
+/** Latest attempts for the given users across the given packages, keyed "packageId:userId". */
+export async function latestAttempts(packageIds: string[], userIds: string[]) {
+	if (packageIds.length === 0 || userIds.length === 0) return new Map<string, AttemptSummary>();
+	const rows = await db
+		.select(attemptColumns)
+		.from(scormAttempt)
+		.where(and(inArray(scormAttempt.packageId, packageIds), inArray(scormAttempt.userId, userIds)));
+	return latestOnly(rows);
+}
+
+/** The course's packages, each with this user's latest attempt (if any). */
+export async function packagesWithProgress(courseId: string, userId: string) {
+	const packages = await listPackages(courseId);
+	const attempts = await latestAttempts(
+		packages.map((p) => p.id),
+		[userId]
+	);
+	return packages.map((p) => ({ ...p, attempt: attempts.get(`${p.id}:${userId}`) ?? null }));
+}

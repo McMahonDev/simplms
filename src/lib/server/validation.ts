@@ -62,7 +62,14 @@ export const formFields = {
 			.toLowerCase()
 			.min(1, 'Required')
 			.max(80)
-			.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Use lowercase letters, numbers, and single dashes')
+			.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Use lowercase letters, numbers, and single dashes'),
+	/** Blank means "generate from the title". */
+	optionalSlug: () =>
+		z
+			.union([z.literal(''), formFields.slug()])
+			.optional()
+			.transform((v) => v || undefined),
+	sortOrder: () => z.coerce.number().int().min(0).max(100000).default(0)
 };
 
 export function slugify(text: string): string {
