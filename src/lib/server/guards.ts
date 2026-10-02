@@ -19,3 +19,16 @@ export function safeRedirectTarget(target: string | null | undefined, fallback =
 	}
 	return target;
 }
+
+/**
+ * True when a state-changing request comes from our own pages. SvelteKit's CSRF check
+ * covers form actions; +server.ts endpoints that accept text/plain (sendBeacon) need this.
+ * Browsers send Origin on POST and Sec-Fetch-Site on all requests.
+ */
+export function isSameOrigin(request: Request, url: URL): boolean {
+	const origin = request.headers.get('origin');
+	if (origin && origin !== url.origin) return false;
+	const site = request.headers.get('sec-fetch-site');
+	if (site && site !== 'same-origin') return false;
+	return true;
+}

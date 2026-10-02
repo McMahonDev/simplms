@@ -10,6 +10,7 @@
 import { error, json } from '@sveltejs/kit';
 import { z } from 'zod';
 import { getAttemptForCommit, saveCommit } from '#lib/server/db/attempts.js';
+import { isSameOrigin } from '#lib/server/guards.js';
 import { can } from '#lib/server/permissions.js';
 import { normalizeCommit } from '#lib/server/scorm/cmi.js';
 import type { RequestHandler } from './$types';
@@ -23,6 +24,7 @@ const commitSchema = z.object({
 const failure = (status: number) => json({ result: false, errorCode: 101 }, { status });
 
 export const POST: RequestHandler = async ({ params, url, request, locals }) => {
+	if (!isSameOrigin(request, url)) return failure(403);
 	const user = locals.user;
 	if (!user) return failure(401);
 
