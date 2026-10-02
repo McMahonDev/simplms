@@ -141,6 +141,13 @@ export const scormAttempt = pgTable(
 		scoreRaw: doublePrecision('score_raw'),
 		/** Accumulated time across all sessions, in seconds. */
 		totalTime: doublePrecision('total_time').notNull().default(0),
+		/**
+		 * The player session that last committed and the session_time it reported.
+		 * Autocommits resend the running session_time, so total_time is
+		 * (total before this session) + (latest session_time), not a sum of every commit.
+		 */
+		sessionId: uuid('session_id'),
+		sessionTime: doublePrecision('session_time').notNull().default(0),
 		lastAccessedAt: timestamp('last_accessed_at', { withTimezone: true }),
 		...timestamps()
 	},

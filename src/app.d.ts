@@ -12,6 +12,13 @@ declare global {
 		// interface PageState {}
 		// interface Platform {}
 	}
+
+	interface Window {
+		/** SCORM 1.2 runtime API, found by SCOs walking window.parent. */
+		API?: unknown;
+		/** SCORM 2004 runtime API. */
+		API_1484_11?: unknown;
+	}
 }
 
 export {};

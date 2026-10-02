@@ -67,3 +67,16 @@ Choices made where the spec was ambiguous or the tooling forced a deviation. New
   separate origin and bridge the API with scorm-again's cross-frame API.
 - **The sample packages are committed** under `fixtures/scorm/` (CC BY 3.0, Rustici Software) so
   seeding works offline.
+- **Learners always resume their latest attempt.** Relaunching restores the stored CMI even after
+  a normal (non-suspend) exit; `cmi.entry` is `resume` only when the last exit was `suspend`.
+  New attempts can be added later using `attempt_number`.
+- **SCORM 1.2 `failed` maps to completed/failed** (as Rustici's SCORM Engine does), so a learner
+  who finished the assessment shows as complete in reports, with the failure visible.
+- **Session-aware time accumulation.** Each player page load gets a session id passed on the
+  commit URL. Autocommits resend the running `session_time`, so the attempt stores
+  `session_id`/`session_time` and computes `total_time = previous sessions + current session`.
+- **Exit unloads the SCO by navigating its frame to about:blank** so it gets a normal
+  `beforeunload`/`unload` and can set `exit=suspend` and call LMSFinish/Terminate. If it doesn't,
+  the player commits and finishes on its behalf.
+- **Commits are synchronous** (scorm-again's SCORM-compliant default); terminate commits use
+  `sendBeacon`, so the endpoint parses the body as text regardless of content type.
