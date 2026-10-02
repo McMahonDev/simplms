@@ -1,0 +1,50 @@
+/** Content types for files commonly found in SCORM packages. */
+const TYPES: Record<string, string> = {
+	html: 'text/html; charset=utf-8',
+	htm: 'text/html; charset=utf-8',
+	xhtml: 'application/xhtml+xml',
+	js: 'text/javascript',
+	mjs: 'text/javascript',
+	css: 'text/css',
+	json: 'application/json',
+	xml: 'application/xml',
+	xsd: 'application/xml',
+	dtd: 'application/xml-dtd',
+	txt: 'text/plain; charset=utf-8',
+	csv: 'text/csv',
+	vtt: 'text/vtt',
+	srt: 'text/plain; charset=utf-8',
+	png: 'image/png',
+	jpg: 'image/jpeg',
+	jpeg: 'image/jpeg',
+	gif: 'image/gif',
+	svg: 'image/svg+xml',
+	webp: 'image/webp',
+	avif: 'image/avif',
+	ico: 'image/x-icon',
+	bmp: 'image/bmp',
+	mp3: 'audio/mpeg',
+	m4a: 'audio/mp4',
+	wav: 'audio/wav',
+	ogg: 'audio/ogg',
+	oga: 'audio/ogg',
+	mp4: 'video/mp4',
+	m4v: 'video/mp4',
+	webm: 'video/webm',
+	ogv: 'video/ogg',
+	mov: 'video/quicktime',
+	woff: 'font/woff',
+	woff2: 'font/woff2',
+	ttf: 'font/ttf',
+	otf: 'font/otf',
+	eot: 'application/vnd.ms-fontobject',
+	pdf: 'application/pdf',
+	swf: 'application/x-shockwave-flash',
+	wasm: 'application/wasm',
+	zip: 'application/zip'
+};
+
+export function contentTypeFor(filePath: string): string {
+	const ext = filePath.slice(filePath.lastIndexOf('.') + 1).toLowerCase();
+	return TYPES[ext] ?? 'application/octet-stream';
+}

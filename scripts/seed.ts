@@ -7,12 +7,15 @@
  *
  * Refuses to run twice; use `pnpm db:reset` to start over.
  */
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { eq } from 'drizzle-orm';
 import { hashPassword } from 'better-auth/crypto';
 import { createDb } from '../src/lib/server/db/client';
 import * as t from '../src/lib/server/db/schema';
 import { loadScriptEnv } from '../src/lib/server/env-schema';
+import { importScormZip } from '../src/lib/server/scorm/import';
+import { LocalDiskStorage } from '../src/lib/server/storage/local';
 
 const env = loadScriptEnv();
 const db = createDb(env.DATABASE_URL);
@@ -154,10 +157,42 @@ async function main() {
 			]);
 	});
 
+	await seedGolfPackages();
+
 	console.log('\nSeeded SimpLMS. Sign in with:\n');
 	console.table(credentials);
 	if (!process.env.SEED_PASSWORD) {
 		console.log('Passwords are random per seed run. Save them now or set SEED_PASSWORD.\n');
+	}
+}
+
+/** Imports Rustici's Golf Examples (SCORM 1.2 and 2004) into the Golf Fundamentals course. */
+async function seedGolfPackages() {
+	const golf = await db.query.course.findFirst({ where: eq(t.course.slug, 'golf-fundamentals') });
+	if (!golf) return;
+	const storage = new LocalDiskStorage(env.STORAGE_DIR);
+	const packages = [
+		{ file: 'RuntimeBasicCalls_SCORM12.zip', title: 'Golf Explained (SCORM 1.2)' },
+		{ file: 'RuntimeBasicCalls_SCORM20043rdEdition.zip', title: 'Golf Explained (SCORM 2004)' }
+	];
+	for (const [sortOrder, p] of packages.entries()) {
+		const id = randomUUID();
+		const imported = await importScormZip({
+			zipPath: fileURLToPath(new URL(`../fixtures/scorm/${p.file}`, import.meta.url)),
+			packageId: id,
+			storage,
+			limits: { maxFiles: env.SCORM_MAX_FILES, maxTotalBytes: env.SCORM_MAX_UNCOMPRESSED_MB }
+		});
+		await db.insert(t.scormPackage).values({
+			id,
+			courseId: golf.id,
+			title: p.title,
+			version: imported.version,
+			entryHref: imported.entryHref,
+			storageKey: imported.storageKey,
+			manifestJson: imported.json,
+			sortOrder
+		});
 	}
 }
 

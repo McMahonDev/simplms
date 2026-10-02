@@ -35,3 +35,35 @@ Choices made where the spec was ambiguous or the tooling forced a deviation. New
 - **Foreign key delete behavior:** deleting a user cascades to their enrollments and attempts and
   sets `course.created_by` to null. Deleting a course cascades to enrollments, packages, and
   attempts. Categories `restrict`: the app blocks deleting a category with courses or children.
+
+## Courses and enrollments
+
+- **Browsing vs. opening a course.** `/courses` lists every visible course so learners can see
+  what exists, but only enrolled users (and staff) can open one. Others see "Not enrolled. Ask a
+  teacher to add you." Self-enrollment is out of scope.
+- **Teachers edit all course details**, including category and visibility, because the permission
+  table grants them "Edit course details". Only admins and managers can delete a course.
+- **Suspended enrollments grant nothing**, for teachers and students alike.
+- **Categories** nest to any depth. Moving a category under itself or a descendant is rejected.
+  Deleting is blocked while a category has courses or subcategories.
+
+## SCORM
+
+- **Uploads are spooled to a temp file** because yauzl needs random access to read the central
+  directory. SvelteKit's `request.formData()` buffers the upload in memory first, which is fine
+  for a demo but should become a streaming upload (or direct-to-R2 presigned upload) later.
+- **Size limits:** the zip itself (`SCORM_MAX_UPLOAD_MB`), total uncompressed bytes counted while
+  inflating (`SCORM_MAX_UNCOMPRESSED_MB`, so lying headers don't help), and file count
+  (`SCORM_MAX_FILES`). Symlink entries are rejected.
+- **Zip slip is checked twice:** yauzl rejects `..` and absolute names, and `safeEntryPath`
+  repeats the check; the storage driver also refuses keys that resolve outside its root.
+- **The manifest is validated before anything is written**, and a failed extraction deletes
+  whatever was written. The launch file must exist in the zip.
+- **Launch resolution** follows the spec, plus two small additions from the CAM: nested items are
+  searched depth-first, and `item@parameters` is appended to the launch URL.
+- **Same-origin content is a trust decision.** Packages run JavaScript on the app's origin (the
+  spec requires same-origin so the SCO can find `window.parent.API`). Only teachers, managers,
+  and admins can upload, so that's acceptable for a demo. For production, serve content from a
+  separate origin and bridge the API with scorm-again's cross-frame API.
+- **The sample packages are committed** under `fixtures/scorm/` (CC BY 3.0, Rustici Software) so
+  seeding works offline.
