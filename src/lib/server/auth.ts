@@ -6,7 +6,7 @@ import { building, dev } from '$app/env';
 import { ALLOW_SIGNUP, BETTER_AUTH_SECRET, BETTER_AUTH_URL } from '$app/env/private';
 import { db } from './db/index.js';
 import * as schema from './db/schema.js';
-import { authPlugins, baseAuthOptions } from './auth-options.js';
+import { adminPlugin, baseAuthOptions } from './auth-options.js';
 import { DEV_AUTH_SECRET } from './env-schema.js';
 
 if (!dev && !building && BETTER_AUTH_SECRET === DEV_AUTH_SECRET) {
@@ -24,7 +24,7 @@ export const auth = betterAuth({
 	},
 	// sveltekitCookies must be last so it can copy Set-Cookie headers from server-side
 	// auth.api calls (sign in from a form action) onto the SvelteKit response.
-	plugins: [...authPlugins, sveltekitCookies(getRequestEvent)]
+	plugins: [adminPlugin, sveltekitCookies(getRequestEvent)]
 });
 
 export type SessionUser = typeof auth.$Infer.Session.user;

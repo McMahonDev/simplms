@@ -19,7 +19,7 @@ export type SiteRole = (typeof SITE_ROLES)[number];
  */
 const ac = createAccessControl(defaultStatements);
 
-const adminPlugin = admin({
+export const adminPlugin = admin({
 	ac,
 	roles: {
 		admin: ac.newRole(adminAc.statements),
@@ -30,8 +30,6 @@ const adminPlugin = admin({
 	adminRoles: ['admin'],
 	defaultRole: 'user'
 });
-
-export const authPlugins = [adminPlugin] as const;
 
 export const baseAuthOptions = {
 	appName: 'SimpLMS',

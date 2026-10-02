@@ -5,11 +5,11 @@
  */
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { authPlugins, baseAuthOptions } from './src/lib/server/auth-options';
+import { adminPlugin, baseAuthOptions } from './src/lib/server/auth-options';
 
 export const auth = betterAuth({
 	...baseAuthOptions,
 	// The CLI only reads table definitions; it never connects.
 	database: drizzleAdapter({} as never, { provider: 'pg' }),
-	plugins: authPlugins
+	plugins: [adminPlugin]
 });
