@@ -4,7 +4,14 @@
  */
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { db } from './index.js';
-import { type CompletionStatus, type SuccessStatus, scormAttempt, scormPackage } from './schema.js';
+import {
+	type CompletionStatus,
+	type SuccessStatus,
+	course,
+	enrollment,
+	scormAttempt,
+	scormPackage
+} from './schema.js';
 
 export type AttemptSummary = {
 	packageId: string;
@@ -75,4 +82,36 @@ export async function packagesWithProgress(courseId: string, userId: string) {
 		[userId]
 	);
 	return packages.map((p) => ({ ...p, attempt: attempts.get(`${p.id}:${userId}`) ?? null }));
+}
+
+/** The user's active enrollments with course info, for the dashboard. */
+export async function myEnrollments(userId: string) {
+	return db
+		.select({
+			courseId: course.id,
+			title: course.title,
+			slug: course.slug,
+			summary: course.summary,
+			visible: course.visible,
+			role: enrollment.role,
+			status: enrollment.status
+		})
+		.from(enrollment)
+		.innerJoin(course, eq(course.id, enrollment.courseId))
+		.where(and(eq(enrollment.userId, userId), eq(enrollment.status, 'active')))
+		.orderBy(asc(course.title));
+}
+
+/** Packages for several courses at once, in course order. */
+export async function packagesForCourses(courseIds: string[]) {
+	if (courseIds.length === 0) return [];
+	return db
+		.select({
+			id: scormPackage.id,
+			courseId: scormPackage.courseId,
+			title: scormPackage.title
+		})
+		.from(scormPackage)
+		.where(inArray(scormPackage.courseId, courseIds))
+		.orderBy(asc(scormPackage.sortOrder), asc(scormPackage.createdAt));
 }
