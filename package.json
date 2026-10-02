@@ -15,7 +15,13 @@
 		"test": "vitest --run",
 		"test:e2e": "playwright test",
 		"test:watch": "vitest",
-		"test:e2e:install": "playwright install chromium"
+		"test:e2e:install": "playwright install chromium",
+		"db:generate": "drizzle-kit generate",
+		"db:migrate": "drizzle-kit migrate",
+		"db:seed": "tsx scripts/seed.ts",
+		"db:reset": "tsx scripts/reset.ts && drizzle-kit migrate && tsx scripts/seed.ts",
+		"db:studio": "drizzle-kit studio",
+		"auth:generate": "auth generate --config better-auth.config.ts --output src/lib/server/db/auth-schema.ts -y && prettier --write src/lib/server/db/auth-schema.ts"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
@@ -24,6 +30,8 @@
 		"@sveltejs/kit": "^3.0.0",
 		"@sveltejs/vite-plugin-svelte": "^7.2.0",
 		"@types/node": "^24",
+		"auth": "1.7.7",
+		"drizzle-kit": "^0.31.11",
 		"eslint": "^10.4.1",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.19.0",
@@ -32,6 +40,7 @@
 		"prettier-plugin-svelte": "^4.1.0",
 		"svelte": "^5.56.7",
 		"svelte-check": "^4.6.0",
+		"tsx": "^4.23.15",
 		"typescript": "^6.0.3",
 		"typescript-eslint": "^8.60.1",
 		"vite": "^8.3.0",
@@ -43,5 +52,11 @@
 	},
 	"engines": {
 		"node": ">=22.17"
+	},
+	"dependencies": {
+		"better-auth": "^1.7.7",
+		"drizzle-orm": "^0.45.3",
+		"postgres": "^3.4.9",
+		"zod": "^4.6.5"
 	}
 }
