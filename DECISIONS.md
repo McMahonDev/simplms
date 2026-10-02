@@ -80,3 +80,25 @@ Choices made where the spec was ambiguous or the tooling forced a deviation. New
   the player commits and finishes on its behalf.
 - **Commits are synchronous** (scorm-again's SCORM-compliant default); terminate commits use
   `sendBeacon`, so the endpoint parses the body as text regardless of content type.
+- **Custom commit transport.** scorm-again's default service sends the terminate commit with
+  `sendBeacon`, which races the page that loads after Exit (the course page could show stale
+  status). The player injects an `httpService` that uses synchronous XHR for every commit,
+  falling back to `sendBeacon` only when the whole page is closing.
+- **Commit endpoint checks Origin/Sec-Fetch-Site.** SvelteKit's CSRF protection covers form
+  actions, not `+server.ts` endpoints, and the endpoint must accept `text/plain` beacons.
+  Session cookies are `SameSite=Lax` as well, so this is defense in depth.
+
+## Users
+
+- **User management goes through Better Auth's admin API** (`createUser`, `setRole`, `banUser`),
+  after our own `users:manage` check, so both layers agree. Admins can't change their own role
+  or ban themselves, which avoids locking the last admin out.
+- **Sign-up creates plain `user` accounts.** Set `ALLOW_SIGNUP=false` to hide `/sign-up`.
+
+## Testing
+
+- **Playwright uses its own database** (`simplms_e2e`, created next to the dev database) and
+  storage folder, seeded with a known password, and runs against a production build via
+  `vite preview`. The dev database is never touched.
+- **One e2e file, two tests:** the student/teacher happy path, plus the cross-course 403 check,
+  which is cheap and covers a "done when" item directly.

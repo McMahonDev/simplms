@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { createCommitTransport } from '#lib/scorm/commit-transport.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -26,7 +27,8 @@
 			lmsCommitUrl: data.commitUrl,
 			dataCommitFormat: 'json' as const,
 			sendFullCommit: true,
-			logLevel: 4 as const
+			logLevel: 4 as const,
+			httpService: createCommitTransport()
 		};
 
 		// The API must be on window before the SCO loads: SCOs find it by walking

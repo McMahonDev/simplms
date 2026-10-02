@@ -21,7 +21,8 @@
 		"db:seed": "tsx scripts/seed.ts",
 		"db:reset": "tsx scripts/reset.ts && drizzle-kit migrate && tsx scripts/seed.ts",
 		"db:studio": "drizzle-kit studio",
-		"auth:generate": "auth generate --config better-auth.config.ts --output src/lib/server/db/auth-schema.ts -y && prettier --write src/lib/server/db/auth-schema.ts"
+		"auth:generate": "auth generate --config better-auth.config.ts --output src/lib/server/db/auth-schema.ts -y && prettier --write src/lib/server/db/auth-schema.ts",
+		"start": "node --env-file-if-exists=.env build"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
