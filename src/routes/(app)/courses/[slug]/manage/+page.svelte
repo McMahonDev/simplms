@@ -113,12 +113,17 @@
 		{:else}
 			<ol class="packages">
 				{#each data.packages as p, i (p.id)}
+					{@const settings = resultFor(form, 'activitySettings', p.id)}
 					<li class="package">
 						<div class="package-head">
 							<span class="order" aria-hidden="true">{i + 1}</span>
 							<div class="package-title">
 								<a href="/courses/{data.course.slug}/scorm/{p.id}">{p.title}</a>
 								<span class="badge">SCORM {p.version}</span>
+								<span class="muted rules">
+									{p.criteria}{#if p.requiresTitles.length > 0}
+										· Locked until {p.requiresTitles.join(', ')}{/if}
+								</span>
 							</div>
 							<div class="cluster">
 								<form method="POST" action="?/movePackage" use:enhance>
@@ -142,8 +147,68 @@
 							</div>
 						</div>
 						<details>
-							<summary>Rename or delete</summary>
+							<summary>Settings</summary>
 							<div class="package-edit">
+								<form method="POST" action="?/activitySettings" use:enhance class="stack">
+									<input type="hidden" name="packageId" value={p.id} />
+									<fieldset class="settings">
+										<legend>Completion</legend>
+										<label>
+											Complete when the learner
+											<select name="completionRule">
+												<option value="viewed" selected={p.completionRule === 'viewed'}
+													>opens it</option
+												>
+												<option value="completed" selected={p.completionRule === 'completed'}
+													>completes or passes it</option
+												>
+												<option value="passed" selected={p.completionRule === 'passed'}
+													>passes it</option
+												>
+											</select>
+										</label>
+										<label>
+											Minimum score <span class="muted">(optional, raw score)</span>
+											<input
+												name="completionMinScore"
+												type="number"
+												min="0"
+												max="1000"
+												step="any"
+												inputmode="decimal"
+												value={p.completionMinScore ?? ''}
+											/>
+										</label>
+									</fieldset>
+									{#if data.packages.length > 1}
+										<fieldset class="settings">
+											<legend>Locked until these are complete</legend>
+											<div class="prereqs">
+												{#each data.packages.filter((o) => o.id !== p.id) as other (other.id)}
+													<label class="checkbox">
+														<input
+															type="checkbox"
+															name="requires"
+															value={other.id}
+															checked={p.requires.includes(other.id)}
+														/>
+														{other.title}
+													</label>
+												{/each}
+											</div>
+										</fieldset>
+									{/if}
+									<div class="cluster">
+										<button type="submit" class="secondary small">Save settings</button>
+										{#if settings?.message}
+											<span
+												class={settings.ok ? 'badge success' : 'alert error'}
+												role={settings.ok ? 'status' : 'alert'}>{settings.message}</span
+											>
+										{/if}
+									</div>
+								</form>
+								<hr />
 								<form method="POST" action="?/renamePackage" use:enhance class="cluster">
 									<input type="hidden" name="packageId" value={p.id} />
 									<label class="grow">
@@ -281,6 +346,41 @@
 		display: grid;
 		gap: var(--space-s);
 		padding-block-start: var(--space-s);
+	}
+
+	.rules {
+		flex-basis: 100%;
+		font-size: var(--text-xs);
+	}
+
+	.settings {
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-s);
+		padding: var(--space-s);
+		margin: 0;
+		display: grid;
+		gap: var(--space-s);
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+		align-items: end;
+
+		& legend {
+			font-size: var(--text-s);
+			font-weight: 600;
+			padding-inline: var(--space-2xs);
+		}
+	}
+
+	.prereqs {
+		display: grid;
+		gap: var(--space-2xs);
+		grid-column: 1 / -1;
+	}
+
+	hr {
+		border: 0;
+		border-top: 1px solid var(--color-border);
+		width: 100%;
+		margin: 0;
 	}
 
 	.grow {

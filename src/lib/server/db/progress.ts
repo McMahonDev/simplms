@@ -3,10 +3,12 @@
  * "Progress" for a package is the user's latest attempt (highest attempt_number).
  */
 import { and, asc, eq, inArray } from 'drizzle-orm';
+import { evaluateActivities } from '../completion.js';
 import { db } from './index.js';
 import {
 	type CompletionStatus,
 	type SuccessStatus,
+	activityPrerequisite,
 	course,
 	enrollment,
 	scormAttempt,
@@ -46,22 +48,9 @@ function latestOnly(rows: AttemptSummary[]): Map<string, AttemptSummary> {
 	return latest;
 }
 
-export function isComplete(a: Pick<AttemptSummary, 'completionStatus' | 'successStatus'>) {
-	return a.completionStatus === 'completed' || a.successStatus === 'passed';
-}
-
+/** A course's activities in order, with their completion rules and prerequisites. */
 export async function listPackages(courseId: string) {
-	return db
-		.select({
-			id: scormPackage.id,
-			title: scormPackage.title,
-			version: scormPackage.version,
-			sortOrder: scormPackage.sortOrder,
-			createdAt: scormPackage.createdAt
-		})
-		.from(scormPackage)
-		.where(eq(scormPackage.courseId, courseId))
-		.orderBy(asc(scormPackage.sortOrder), asc(scormPackage.createdAt));
+	return packagesForCourses([courseId]);
 }
 
 /** Latest attempts for the given users across the given packages, keyed "packageId:userId". */
@@ -81,7 +70,12 @@ export async function packagesWithProgress(courseId: string, userId: string) {
 		packages.map((p) => p.id),
 		[userId]
 	);
-	return packages.map((p) => ({ ...p, attempt: attempts.get(`${p.id}:${userId}`) ?? null }));
+	const states = evaluateActivities(packages, (id) => attempts.get(`${id}:${userId}`));
+	return packages.map((p) => ({
+		...p,
+		attempt: attempts.get(`${p.id}:${userId}`) ?? null,
+		...states.get(p.id)!
+	}));
 }
 
 /** The user's active enrollments with course info, for the dashboard. */
@@ -102,16 +96,36 @@ export async function myEnrollments(userId: string) {
 		.orderBy(asc(course.title));
 }
 
-/** Packages for several courses at once, in course order. */
+/** Activities for several courses at once, in course order, with rules and prerequisites. */
 export async function packagesForCourses(courseIds: string[]) {
 	if (courseIds.length === 0) return [];
-	return db
+	const rows = await db
 		.select({
 			id: scormPackage.id,
 			courseId: scormPackage.courseId,
-			title: scormPackage.title
+			title: scormPackage.title,
+			version: scormPackage.version,
+			sortOrder: scormPackage.sortOrder,
+			createdAt: scormPackage.createdAt,
+			completionRule: scormPackage.completionRule,
+			completionMinScore: scormPackage.completionMinScore
 		})
 		.from(scormPackage)
 		.where(inArray(scormPackage.courseId, courseIds))
 		.orderBy(asc(scormPackage.sortOrder), asc(scormPackage.createdAt));
+	if (rows.length === 0) return [];
+
+	const prerequisites = await db
+		.select()
+		.from(activityPrerequisite)
+		.where(
+			inArray(
+				activityPrerequisite.packageId,
+				rows.map((r) => r.id)
+			)
+		);
+	return rows.map((r) => ({
+		...r,
+		requires: prerequisites.filter((p) => p.packageId === r.id).map((p) => p.requiredPackageId)
+	}));
 }

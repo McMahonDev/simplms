@@ -14,6 +14,7 @@ import {
 	jsonb,
 	pgEnum,
 	pgTable,
+	primaryKey,
 	text,
 	timestamp,
 	unique,
@@ -105,6 +106,12 @@ export const enrollment = pgTable(
 
 export const scormVersion = pgEnum('scorm_version', ['1.2', '2004']);
 
+/**
+ * When an activity counts as complete: once launched (viewed), when the SCO reports completed
+ * or passed (completed), or only when it reports passed (passed).
+ */
+export const completionRule = pgEnum('completion_rule', ['viewed', 'completed', 'passed']);
+
 export const scormPackage = pgTable(
 	'scorm_package',
 	{
@@ -120,9 +127,29 @@ export const scormPackage = pgTable(
 		storageKey: text('storage_key').notNull(),
 		manifestJson: jsonb('manifest_json').notNull(),
 		sortOrder: integer('sort_order').notNull().default(0),
+		completionRule: completionRule('completion_rule').notNull().default('completed'),
+		/** When set, the latest attempt's raw score must also be at least this. */
+		completionMinScore: doublePrecision('completion_min_score'),
 		...timestamps()
 	},
 	(t) => [index().on(t.courseId)]
+);
+
+/** Activities that must be complete before another activity in the same course unlocks. */
+export const activityPrerequisite = pgTable(
+	'activity_prerequisite',
+	{
+		packageId: uuid('package_id')
+			.notNull()
+			.references(() => scormPackage.id, { onDelete: 'cascade' }),
+		requiredPackageId: uuid('required_package_id')
+			.notNull()
+			.references(() => scormPackage.id, { onDelete: 'cascade' })
+	},
+	(t) => [
+		primaryKey({ columns: [t.packageId, t.requiredPackageId] }),
+		index().on(t.requiredPackageId)
+	]
 );
 
 /** Normalized across SCORM 1.2 and 2004 so reports treat both alike. */
@@ -174,5 +201,6 @@ export type EnrollmentMethod = (typeof enrollmentMethod.enumValues)[number];
 export type EnrollmentRole = (typeof enrollmentRole.enumValues)[number];
 export type EnrollmentStatus = (typeof enrollmentStatus.enumValues)[number];
 export type ScormPackage = typeof scormPackage.$inferSelect;
+export type CompletionRule = (typeof completionRule.enumValues)[number];
 export type ScormVersion = (typeof scormVersion.enumValues)[number];
 export type ScormAttempt = typeof scormAttempt.$inferSelect;

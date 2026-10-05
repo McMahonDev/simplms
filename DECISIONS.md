@@ -96,6 +96,27 @@ Choices made where the spec was ambiguous or the tooling forced a deviation. New
   actions, not `+server.ts` endpoints, and the endpoint must accept `text/plain` beacons.
   Session cookies are `SameSite=Lax` as well, so this is defense in depth.
 
+## Completion and locking
+
+- **Completion is set per activity**: _viewed_ (launched once), _completed_ (the SCO reports
+  completed or passed; the default, and the old behavior), or _passed_. An optional minimum score
+  must also be met. Scores are the SCO's raw score (`cmi.core.score.raw` / `cmi.score.raw`),
+  usually 0–100, so a minimum only makes sense for packages that report one; an attempt with no
+  score never meets it.
+- **Rules are applied when reading, not stored.** Changing a rule re-grades every learner's
+  latest attempt immediately; nothing is recalculated or migrated. All rules live in
+  `src/lib/server/completion.ts`, shared by the course page, dashboard, report, and launch guard.
+- **Locking is by prerequisite activities** in the same course. An activity unlocks once every
+  prerequisite meets its own completion rule. Saving a prerequisite that would form a loop is
+  rejected. Course progress counts every activity, locked or not; "Continue" skips locked ones.
+- **Locks are enforced on the server.** The launch page returns 403 for a locked activity, and the
+  content route only serves a package's files to people who have an attempt for it, which only
+  the launch page creates. Teachers, managers, and admins can preview locked activities.
+- **Locking an activity someone already finished** keeps it Completed, but they can't reopen it
+  until the new prerequisites are met.
+- Not built yet: date-based availability, course-level completion criteria (e.g. "only these
+  activities count"), and grade aggregation across attempts.
+
 ## Users
 
 - **User management goes through Better Auth's admin API** (`createUser`, `setRole`, `banUser`),

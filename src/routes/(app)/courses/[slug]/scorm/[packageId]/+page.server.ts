@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { loadCourseFor } from '#lib/server/course-context.js';
 import { getOrCreateCurrentAttempt, touchAttempt } from '#lib/server/db/attempts.js';
 import { getCoursePackage } from '#lib/server/db/packages.js';
+import { packagesWithProgress } from '#lib/server/db/progress.js';
+import { can } from '#lib/server/permissions.js';
 import { buildLaunchCmi } from '#lib/server/scorm/cmi.js';
 import type { PageServerLoad } from './$types';
 
@@ -13,6 +15,14 @@ export const load: PageServerLoad = async (event) => {
 	const packageId = z.uuid().safeParse(event.params.packageId);
 	const pkg = packageId.success ? await getCoursePackage(course.id, packageId.data) : null;
 	if (!pkg) error(404, 'Activity not found');
+
+	// Learners can't open an activity until its prerequisites are complete; staff can preview.
+	if (!(await can(user, 'course:edit', course.id))) {
+		const activity = (await packagesWithProgress(course.id, user.id)).find((a) => a.id === pkg.id);
+		if (activity && activity.lockedBy.length > 0) {
+			error(403, `This activity is locked. Complete ${activity.lockedBy.join(', ')} first.`);
+		}
+	}
 
 	const attempt = await getOrCreateCurrentAttempt(pkg.id, user.id);
 	await touchAttempt(attempt.id);

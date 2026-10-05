@@ -1,6 +1,11 @@
 import { and, asc, eq, max } from 'drizzle-orm';
 import { db } from './index.js';
-import { type ScormVersion, scormPackage } from './schema.js';
+import {
+	type CompletionRule,
+	type ScormVersion,
+	activityPrerequisite,
+	scormPackage
+} from './schema.js';
 
 export async function getPackage(id: string) {
 	const [row] = await db.select().from(scormPackage).where(eq(scormPackage.id, id)).limit(1);
@@ -44,6 +49,40 @@ export async function renamePackage(courseId: string, packageId: string, title: 
 		.where(and(eq(scormPackage.id, packageId), eq(scormPackage.courseId, courseId)))
 		.returning({ id: scormPackage.id });
 	return Boolean(row);
+}
+
+export type ActivitySettings = {
+	completionRule: CompletionRule;
+	completionMinScore: number | null;
+	/** Must already be checked to belong to the same course and not form a cycle. */
+	requires: string[];
+};
+
+/** Saves an activity's completion rule and prerequisites. False when it isn't in the course. */
+export async function updateActivitySettings(
+	courseId: string,
+	packageId: string,
+	settings: ActivitySettings
+) {
+	return db.transaction(async (tx) => {
+		const [row] = await tx
+			.update(scormPackage)
+			.set({
+				completionRule: settings.completionRule,
+				completionMinScore: settings.completionMinScore
+			})
+			.where(and(eq(scormPackage.id, packageId), eq(scormPackage.courseId, courseId)))
+			.returning({ id: scormPackage.id });
+		if (!row) return false;
+
+		await tx.delete(activityPrerequisite).where(eq(activityPrerequisite.packageId, packageId));
+		if (settings.requires.length > 0) {
+			await tx
+				.insert(activityPrerequisite)
+				.values(settings.requires.map((requiredPackageId) => ({ packageId, requiredPackageId })));
+		}
+		return true;
+	});
 }
 
 /** Swaps a package with its neighbour and renumbers the course's packages 0..n-1. */

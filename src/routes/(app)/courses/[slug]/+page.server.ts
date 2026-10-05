@@ -1,5 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
+import { describeCriteria } from '#lib/server/completion.js';
 import { findCourse, requireSelfEnroll } from '#lib/server/course-context.js';
 import { checkEnrollmentKey } from '#lib/server/db/courses.js';
 import { EnrollmentError, enrollUser } from '#lib/server/db/enrollments.js';
@@ -28,7 +29,10 @@ export const load: PageServerLoad = async (event) => {
 		return { course, activities: [], caps, join: { method: course.enrollmentMethod } };
 	}
 
-	const activities = await packagesWithProgress(course.id, user.id);
+	const activities = (await packagesWithProgress(course.id, user.id)).map((a) => ({
+		...a,
+		criteria: describeCriteria(a)
+	}));
 	return { course, activities, caps, join: null };
 };
 

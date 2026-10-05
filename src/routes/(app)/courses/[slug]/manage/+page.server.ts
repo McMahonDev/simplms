@@ -1,9 +1,15 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
+import { describeCriteria, findCycle } from '#lib/server/completion.js';
 import { loadCourseFor } from '#lib/server/course-context.js';
 import { flattenTree, getCategoryTree } from '#lib/server/db/categories.js';
 import { deleteCourse, updateCourse } from '#lib/server/db/courses.js';
-import { deletePackage, movePackage, renamePackage } from '#lib/server/db/packages.js';
+import {
+	deletePackage,
+	movePackage,
+	renamePackage,
+	updateActivitySettings
+} from '#lib/server/db/packages.js';
 import { listPackages } from '#lib/server/db/progress.js';
 import { courseSchema } from '#lib/server/form-schemas.js';
 import { capabilitiesFor } from '#lib/server/permissions.js';
@@ -22,10 +28,15 @@ export const load: PageServerLoad = async (event) => {
 		course.id
 	);
 	const [tree, packages] = await Promise.all([getCategoryTree(), listPackages(course.id)]);
+	const titles = new Map(packages.map((p) => [p.id, p.title]));
 	return {
 		course,
 		caps,
-		packages,
+		packages: packages.map((p) => ({
+			...p,
+			criteria: describeCriteria(p),
+			requiresTitles: p.requires.map((id) => titles.get(id)).filter((t) => t !== undefined)
+		})),
 		maxUploadMb: Math.round(maxUploadBytes / 1024 / 1024),
 		categories: flattenTree(tree).map((c) => ({ id: c.id, name: c.name, depth: c.depth }))
 	};
@@ -35,6 +46,17 @@ const packageSchema = z.object({
 	packageId: formFields.uuid(),
 	direction: z.enum(['up', 'down']).optional(),
 	title: z.string().trim().min(1, 'Required').max(200).optional()
+});
+
+const activitySettingsSchema = z.object({
+	packageId: formFields.uuid(),
+	completionRule: z.enum(['viewed', 'completed', 'passed']),
+	completionMinScore: z
+		.string()
+		.trim()
+		.transform((v) => (v === '' ? null : Number(v)))
+		.pipe(z.number('Enter a number').min(0).max(1000).nullable()),
+	requires: z.array(formFields.uuid()).max(100)
 });
 
 const uploadTitleSchema = z.string().trim().max(200).optional();
@@ -100,6 +122,51 @@ export const actions: Actions = {
 		const found = await renamePackage(course.id, parsed.data.packageId, parsed.data.title);
 		if (!found) return fail(404, { action: 'renamePackage', ...formError('Activity not found.') });
 		return { action: 'renamePackage', id: parsed.data.packageId, ok: true, message: 'Renamed.' };
+	},
+
+	activitySettings: async (event) => {
+		const { course } = await loadCourseFor(event, 'course:edit');
+		const formData = await event.request.formData();
+		const parsed = activitySettingsSchema.safeParse({
+			packageId: formData.get('packageId'),
+			completionRule: formData.get('completionRule'),
+			completionMinScore: formData.get('completionMinScore') ?? '',
+			requires: formData.getAll('requires')
+		});
+		if (!parsed.success) {
+			const id = String(formData.get('packageId') ?? '');
+			const scoreError = parsed.error.issues.some((i) => i.path[0] === 'completionMinScore');
+			return fail(400, {
+				action: 'activitySettings',
+				id,
+				...formError(
+					scoreError ? 'Minimum score must be a number from 0 to 1000.' : 'Invalid request.'
+				)
+			});
+		}
+
+		const { packageId, completionRule, completionMinScore, requires } = parsed.data;
+		const activities = await listPackages(course.id);
+		const fail400 = (message: string) =>
+			fail(400, { action: 'activitySettings', id: packageId, ...formError(message) });
+		const inCourse = new Set(activities.map((a) => a.id));
+		if (!inCourse.has(packageId)) {
+			return fail(404, { action: 'activitySettings', ...formError('Activity not found.') });
+		}
+		if (requires.some((id) => !inCourse.has(id)))
+			return fail400('Pick prerequisites from this course.');
+		if (findCycle(activities, packageId, requires)) {
+			return fail400(
+				'Those prerequisites would create a loop, so the activities could never unlock.'
+			);
+		}
+
+		await updateActivitySettings(course.id, packageId, {
+			completionRule,
+			completionMinScore,
+			requires: [...new Set(requires)]
+		});
+		return { action: 'activitySettings', id: packageId, ok: true, message: 'Settings saved.' };
 	},
 
 	deletePackage: async (event) => {

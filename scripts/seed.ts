@@ -178,6 +178,7 @@ async function seedGolfPackages() {
 		{ file: 'RuntimeBasicCalls_SCORM12.zip', title: 'Golf Explained (SCORM 1.2)' },
 		{ file: 'RuntimeBasicCalls_SCORM20043rdEdition.zip', title: 'Golf Explained (SCORM 2004)' }
 	];
+	const ids: string[] = [];
 	for (const [sortOrder, p] of packages.entries()) {
 		const id = randomUUID();
 		const imported = await importScormZip({
@@ -196,7 +197,12 @@ async function seedGolfPackages() {
 			manifestJson: imported.json,
 			sortOrder
 		});
+		ids.push(id);
 	}
+	// The 2004 version stays locked until the 1.2 version is complete.
+	await db
+		.insert(t.activityPrerequisite)
+		.values({ packageId: ids[1]!, requiredPackageId: ids[0]! });
 }
 
 main()

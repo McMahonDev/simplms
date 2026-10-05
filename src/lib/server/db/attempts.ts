@@ -28,6 +28,19 @@ export async function getOrCreateCurrentAttempt(packageId: string, userId: strin
 	return created;
 }
 
+/**
+ * True when the user has opened the package at least once. The launch page creates the attempt
+ * after checking locks, so the content route uses this to keep locked packages closed.
+ */
+export async function hasAttempt(packageId: string, userId: string) {
+	const [row] = await db
+		.select({ id: scormAttempt.id })
+		.from(scormAttempt)
+		.where(and(eq(scormAttempt.packageId, packageId), eq(scormAttempt.userId, userId)))
+		.limit(1);
+	return Boolean(row);
+}
+
 /** The attempt plus the package facts the commit endpoint needs. */
 export async function getAttemptForCommit(attemptId: string) {
 	const [row] = await db

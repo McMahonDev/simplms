@@ -7,6 +7,7 @@
  */
 import { error } from '@sveltejs/kit';
 import { z } from 'zod';
+import { hasAttempt } from '#lib/server/db/attempts.js';
 import { getPackage } from '#lib/server/db/packages.js';
 import { requireUser } from '#lib/server/guards.js';
 import { parseRange } from '#lib/server/http-range.js';
@@ -28,6 +29,10 @@ export const GET: RequestHandler = async (event) => {
 	// Check course access before touching storage.
 	if (!(await can(user, 'scorm:launch', pkg.courseId))) {
 		error(403, 'You do not have access to this course.');
+	}
+	// Files are only served once the launch page (which enforces locks) has opened the package.
+	if (!(await hasAttempt(pkg.id, user.id))) {
+		error(403, 'Open this activity from its course page first.');
 	}
 
 	const relative = event.params.path;

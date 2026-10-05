@@ -79,20 +79,35 @@
 			{:else}
 				<ol class="activities">
 					{#each data.activities as a (a.id)}
-						<li class="card activity">
+						{@const locked = a.lockedBy.length > 0}
+						<li class="card activity" class:locked>
 							<div class="info">
 								<h3>{a.title}</h3>
 								<p class="muted meta">
-									SCORM {a.version}
+									SCORM {a.version} · To complete: {a.criteria.toLowerCase()}
 									{#if a.attempt?.scoreRaw != null}· Score {a.attempt.scoreRaw}{/if}
 								</p>
+								{#if locked}
+									<p class="meta lock">Complete {a.lockedBy.join(', ')} first.</p>
+								{/if}
 							</div>
-							<StatusBadge attempt={a.attempt} />
-							{#if data.caps['scorm:launch']}
-								<a class="button" href="/courses/{data.course.slug}/scorm/{a.id}">
-									{a.attempt && a.attempt.completionStatus !== 'not attempted'
-										? 'Continue'
-										: 'Start'}
+							{#if locked && !a.complete}
+								<span class="badge">Locked</span>
+							{:else}
+								<StatusBadge attempt={a.attempt} complete={a.complete} />
+							{/if}
+							{#if data.caps['scorm:launch'] && (!locked || data.caps['course:edit'])}
+								<a
+									class="button {locked ? 'secondary' : ''}"
+									href="/courses/{data.course.slug}/scorm/{a.id}"
+								>
+									{#if locked}
+										Preview
+									{:else}
+										{a.attempt && a.attempt.completionStatus !== 'not attempted'
+											? 'Continue'
+											: 'Start'}
+									{/if}
 									<span class="visually-hidden">{a.title}</span>
 								</a>
 							{/if}
@@ -159,6 +174,14 @@
 		& .info {
 			flex: 1 1 14rem;
 		}
+	}
+
+	.locked h3 {
+		color: var(--color-text-muted);
+	}
+
+	.lock {
+		color: var(--color-warning);
 	}
 
 	.meta {

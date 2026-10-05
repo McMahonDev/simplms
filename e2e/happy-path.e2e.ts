@@ -176,3 +176,52 @@ test('learners join open and code-protected courses but not assigned-only ones',
 	await page.getByRole('button', { name: 'Join course' }).click();
 	await expect(page.getByRole('heading', { name: 'Golf Explained (SCORM 1.2)' })).toBeVisible();
 });
+
+test('activities stay locked until prerequisites are complete; teachers set completion rules', async ({
+	page
+}) => {
+	// Seeded: Golf Explained (SCORM 2004) requires Golf Explained (SCORM 1.2).
+	await signIn(page, 'teacher2@simplms.test');
+	await page.goto('/courses/golf-fundamentals');
+	await page.getByRole('link', { name: 'Preview Golf Explained (SCORM 2004)' }).click();
+	await expect(page).toHaveURL(/\/scorm\//);
+	await expect(page.getByRole('heading', { name: 'Golf Explained (SCORM 2004)' })).toBeVisible();
+	const lockedUrl = new URL(page.url()).pathname;
+	const contentUrl = await page.locator('iframe.sco').getAttribute('src');
+
+	// Require a pass with 90+ on the 1.2 activity.
+	await page.goto('/courses/golf-fundamentals/manage');
+	const first = page.getByRole('listitem').filter({
+		has: page.getByRole('link', { name: 'Golf Explained (SCORM 1.2)', exact: true })
+	});
+	await first.locator('summary', { hasText: 'Settings' }).click();
+	await first.getByLabel('Complete when the learner').selectOption('passed');
+	await first.getByLabel(/Minimum score/).fill('90');
+	await first.getByRole('button', { name: 'Save settings' }).click();
+	await expect(first.getByText('Settings saved.')).toBeVisible();
+	await expect(first.getByText('Pass it with a score of at least 90')).toBeVisible();
+
+	// Making 1.2 require 2004 would lock both forever.
+	await first.getByRole('checkbox', { name: 'Golf Explained (SCORM 2004)' }).check();
+	await first.getByRole('button', { name: 'Save settings' }).click();
+	await expect(first.getByRole('alert')).toContainText('would create a loop');
+	await signOut(page);
+
+	// student2 hasn't started: 2004 is locked on the page, at its URL, and for its files.
+	await signIn(page, 'student2@simplms.test');
+	await page.goto('/courses/golf-fundamentals');
+	const activity = (title: string) =>
+		page.getByRole('listitem').filter({ has: page.getByRole('heading', { name: title }) });
+	const locked = activity('Golf Explained (SCORM 2004)');
+	await expect(locked.getByText('Locked', { exact: true })).toBeVisible();
+	await expect(locked.getByText('Complete Golf Explained (SCORM 1.2) first.')).toBeVisible();
+	await expect(locked.getByRole('link')).toHaveCount(0);
+	await expect(
+		activity('Golf Explained (SCORM 1.2)').getByText(
+			'To complete: pass it with a score of at least 90'
+		)
+	).toBeVisible();
+
+	expect((await page.goto(lockedUrl))?.status()).toBe(403);
+	expect((await page.request.get(contentUrl!)).status()).toBe(403);
+});
