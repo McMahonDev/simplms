@@ -15,10 +15,6 @@
 			resultFor(form, 'renamePackage')
 	);
 	let uploading = $state(false);
-	const enrolled = $derived(resultFor(form, 'enroll'));
-	const enrollmentResult = $derived(
-		resultFor(form, 'updateEnrollment') ?? resultFor(form, 'unenroll')
-	);
 </script>
 
 <svelte:head><title>Manage {data.course.title} · SimpLMS</title></svelte:head>
@@ -117,12 +113,17 @@
 		{:else}
 			<ol class="packages">
 				{#each data.packages as p, i (p.id)}
+					{@const settings = resultFor(form, 'activitySettings', p.id)}
 					<li class="package">
 						<div class="package-head">
 							<span class="order" aria-hidden="true">{i + 1}</span>
 							<div class="package-title">
 								<a href="/courses/{data.course.slug}/scorm/{p.id}">{p.title}</a>
 								<span class="badge">SCORM {p.version}</span>
+								<span class="muted rules">
+									{p.criteria}{#if p.requiresTitles.length > 0}
+										· Locked until {p.requiresTitles.join(', ')}{/if}
+								</span>
 							</div>
 							<div class="cluster">
 								<form method="POST" action="?/movePackage" use:enhance>
@@ -146,8 +147,68 @@
 							</div>
 						</div>
 						<details>
-							<summary>Rename or delete</summary>
+							<summary>Settings</summary>
 							<div class="package-edit">
+								<form method="POST" action="?/activitySettings" use:enhance class="stack">
+									<input type="hidden" name="packageId" value={p.id} />
+									<fieldset class="settings">
+										<legend>Completion</legend>
+										<label>
+											Complete when the learner
+											<select name="completionRule">
+												<option value="viewed" selected={p.completionRule === 'viewed'}
+													>opens it</option
+												>
+												<option value="completed" selected={p.completionRule === 'completed'}
+													>completes or passes it</option
+												>
+												<option value="passed" selected={p.completionRule === 'passed'}
+													>passes it</option
+												>
+											</select>
+										</label>
+										<label>
+											Minimum score <span class="muted">(optional, raw score)</span>
+											<input
+												name="completionMinScore"
+												type="number"
+												min="0"
+												max="1000"
+												step="any"
+												inputmode="decimal"
+												value={p.completionMinScore ?? ''}
+											/>
+										</label>
+									</fieldset>
+									{#if data.packages.length > 1}
+										<fieldset class="settings">
+											<legend>Locked until these are complete</legend>
+											<div class="prereqs">
+												{#each data.packages.filter((o) => o.id !== p.id) as other (other.id)}
+													<label class="checkbox">
+														<input
+															type="checkbox"
+															name="requires"
+															value={other.id}
+															checked={p.requires.includes(other.id)}
+														/>
+														{other.title}
+													</label>
+												{/each}
+											</div>
+										</fieldset>
+									{/if}
+									<div class="cluster">
+										<button type="submit" class="secondary small">Save settings</button>
+										{#if settings?.message}
+											<span
+												class={settings.ok ? 'badge success' : 'alert error'}
+												role={settings.ok ? 'status' : 'alert'}>{settings.message}</span
+											>
+										{/if}
+									</div>
+								</form>
+								<hr />
 								<form method="POST" action="?/renamePackage" use:enhance class="cluster">
 									<input type="hidden" name="packageId" value={p.id} />
 									<label class="grow">
@@ -175,101 +236,10 @@
 	{#if data.caps['course:enrollments:manage']}
 		<section class="card stack" aria-labelledby="enrollments-heading">
 			<h2 id="enrollments-heading">Enrollments</h2>
-
-			<form method="POST" action="?/enroll" use:enhance class="enroll-form">
-				<label>
-					Email
-					<input
-						type="email"
-						name="email"
-						required
-						autocomplete="off"
-						placeholder="learner@example.com"
-						value={enrolled && !enrolled.ok ? (enrolled.values?.email ?? '') : ''}
-					/>
-					<FieldError errors={enrolled?.errors?.email} />
-				</label>
-				<label>
-					Role
-					<select name="role">
-						<option value="student">Student</option>
-						<option value="teacher" selected={enrolled?.values?.role === 'teacher'}>Teacher</option>
-					</select>
-				</label>
-				<button type="submit">Enroll</button>
-			</form>
-			{#if enrolled?.message}
-				<p class="alert {enrolled.ok ? 'success' : 'error'}" role="status">{enrolled.message}</p>
-			{/if}
-			{#if enrollmentResult?.message && !enrollmentResult.ok}
-				<p class="alert error" role="alert">{enrollmentResult.message}</p>
-			{/if}
-
-			{#if data.enrollments.length === 0}
-				<EmptyState title="Nobody is enrolled yet">
-					<p>Add learners and teachers by email above.</p>
-				</EmptyState>
-			{:else}
-				<div class="table-wrap">
-					<table>
-						<thead>
-							<tr>
-								<th scope="col">Person</th>
-								<th scope="col">Role and status</th>
-								<th scope="col"><span class="visually-hidden">Remove</span></th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each data.enrollments as e (e.id)}
-								<tr class:suspended={e.status === 'suspended'}>
-									<td>
-										<div>
-											{e.name}{#if e.userId === data.currentUserId}
-												<span class="muted you">(you)</span>{/if}
-										</div>
-										<div class="muted email">{e.email}</div>
-									</td>
-									<td>
-										<form method="POST" action="?/updateEnrollment" use:enhance class="cluster">
-											<input type="hidden" name="enrollmentId" value={e.id} />
-											<label>
-												<span class="visually-hidden">Role for {e.name}</span>
-												<select name="role">
-													<option value="student" selected={e.role === 'student'}>Student</option>
-													<option value="teacher" selected={e.role === 'teacher'}>Teacher</option>
-												</select>
-											</label>
-											<label>
-												<span class="visually-hidden">Status for {e.name}</span>
-												<select name="status">
-													<option value="active" selected={e.status === 'active'}>Active</option>
-													<option value="suspended" selected={e.status === 'suspended'}
-														>Suspended</option
-													>
-												</select>
-											</label>
-											<button type="submit" class="secondary small">
-												Save <span class="visually-hidden">changes for {e.name}</span>
-											</button>
-											{#if resultFor(form, 'updateEnrollment', e.id)?.ok}
-												<span class="badge success" role="status">Saved</span>
-											{/if}
-										</form>
-									</td>
-									<td class="remove">
-										<form method="POST" action="?/unenroll" use:enhance>
-											<input type="hidden" name="enrollmentId" value={e.id} />
-											<button type="submit" class="secondary small">
-												Remove <span class="visually-hidden">{e.name}</span>
-											</button>
-										</form>
-									</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
-			{/if}
+			<p>
+				Add, suspend, and remove learners and teachers on the
+				<a href="/courses/{data.course.slug}/enrollments">enrollments page</a>.
+			</p>
 		</section>
 	{/if}
 
@@ -312,17 +282,6 @@
 		gap: var(--space-xs);
 		align-self: end;
 		padding-block-end: var(--space-xs);
-	}
-
-	.enroll-form {
-		display: grid;
-		gap: var(--space-s);
-		grid-template-columns: 1fr;
-		align-items: end;
-
-		@media (min-width: 40rem) {
-			grid-template-columns: 1fr 10rem auto;
-		}
 	}
 
 	.upload-form {
@@ -389,28 +348,43 @@
 		padding-block-start: var(--space-s);
 	}
 
-	.grow {
-		flex: 1 1 14rem;
-	}
-
-	.you {
-		margin-inline-start: var(--space-2xs);
-	}
-
-	.email {
+	.rules {
+		flex-basis: 100%;
 		font-size: var(--text-xs);
 	}
 
-	tr.suspended td:first-child {
-		opacity: 0.65;
+	.settings {
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-s);
+		padding: var(--space-s);
+		margin: 0;
+		display: grid;
+		gap: var(--space-s);
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+		align-items: end;
+
+		& legend {
+			font-size: var(--text-s);
+			font-weight: 600;
+			padding-inline: var(--space-2xs);
+		}
 	}
 
-	td select {
-		width: auto;
+	.prereqs {
+		display: grid;
+		gap: var(--space-2xs);
+		grid-column: 1 / -1;
 	}
 
-	.remove {
-		text-align: right;
+	hr {
+		border: 0;
+		border-top: 1px solid var(--color-border);
+		width: 100%;
+		margin: 0;
+	}
+
+	.grow {
+		flex: 1 1 14rem;
 	}
 
 	.danger-zone {

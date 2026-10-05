@@ -1,6 +1,7 @@
 import { loadCourseFor } from '#lib/server/course-context.js';
 import { listStudents } from '#lib/server/db/enrollments.js';
 import { latestAttempts, listPackages } from '#lib/server/db/progress.js';
+import { describeCriteria, evaluateActivities } from '#lib/server/completion.js';
 import { summarizeProgress } from '#lib/server/progress-summary.js';
 import type { PageServerLoad } from './$types';
 
@@ -16,15 +17,21 @@ export const load: PageServerLoad = async (event) => {
 	);
 
 	const rows = students.map((s) => {
+		const states = evaluateActivities(packages, (id) => attempts.get(`${id}:${s.userId}`));
 		const cells = packages.map((p) => {
 			const a = attempts.get(`${p.id}:${s.userId}`);
-			return a
-				? {
-						completionStatus: a.completionStatus,
-						successStatus: a.successStatus,
-						scoreRaw: a.scoreRaw
-					}
-				: null;
+			const { complete, lockedBy } = states.get(p.id)!;
+			return {
+				complete,
+				locked: lockedBy.length > 0,
+				attempt: a
+					? {
+							completionStatus: a.completionStatus,
+							successStatus: a.successStatus,
+							scoreRaw: a.scoreRaw
+						}
+					: null
+			};
 		});
 		const mine = packages
 			.map((p) => attempts.get(`${p.id}:${s.userId}`))
@@ -48,7 +55,12 @@ export const load: PageServerLoad = async (event) => {
 
 	return {
 		course: { title: course.title, slug: course.slug },
-		packages: packages.map((p) => ({ id: p.id, title: p.title, version: p.version })),
+		packages: packages.map((p) => ({
+			id: p.id,
+			title: p.title,
+			version: p.version,
+			criteria: describeCriteria(p)
+		})),
 		rows
 	};
 };

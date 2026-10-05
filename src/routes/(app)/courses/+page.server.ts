@@ -1,7 +1,7 @@
 import { flattenTree, getCategoryTree } from '#lib/server/db/categories.js';
 import { listCoursesWithEnrollment } from '#lib/server/db/courses.js';
 import { requireUser } from '#lib/server/guards.js';
-import { decide, siteRoleOf } from '#lib/server/permissions.js';
+import { canSelfEnroll, decide, siteRoleOf } from '#lib/server/permissions.js';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
@@ -14,17 +14,22 @@ export const load: PageServerLoad = async (event) => {
 
 	// Visible courses are listed for everyone; hidden ones only for people who can open them.
 	const withAccess = courses
-		.map((c) => ({
-			...c,
-			canOpen: decide('course:view', {
+		.map((c) => {
+			const enrollment =
+				c.enrollmentRole && c.enrollmentStatus
+					? { role: c.enrollmentRole, status: c.enrollmentStatus }
+					: null;
+			const canOpen = decide('course:view', {
 				siteRole,
 				course: { visible: c.visible },
-				enrollment:
-					c.enrollmentRole && c.enrollmentStatus
-						? { role: c.enrollmentRole, status: c.enrollmentStatus }
-						: null
-			})
-		}))
+				enrollment
+			});
+			return {
+				...c,
+				canOpen,
+				canJoin: !canOpen && canSelfEnroll({ course: c, enrollment })
+			};
+		})
 		.filter((c) => c.visible || c.canOpen);
 
 	const flat = flattenTree(tree);

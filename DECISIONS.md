@@ -39,8 +39,16 @@ Choices made where the spec was ambiguous or the tooling forced a deviation. New
 ## Courses and enrollments
 
 - **Browsing vs. opening a course.** `/courses` lists every visible course so learners can see
-  what exists, but only enrolled users (and staff) can open one. Others see "Not enrolled. Ask a
-  teacher to add you." Self-enrollment is out of scope.
+  what exists, but only enrolled users (and staff) can open one.
+- **Enrollment methods** are set per course on its Enrollments page: _assigned only_ (the
+  default; staff add people), _open_ (anyone signed in can join), or _enrollment code_ (join by
+  typing a code the teacher shares). Joining always creates a normal student enrollment, so
+  self-enrolled learners appear in reports and can be suspended like anyone else. People with
+  any enrollment, including a suspended one, can't rejoin by themselves, and hidden courses
+  can't be joined.
+- **Enrollment codes are stored in plain text** so teachers can see and share them, like Moodle.
+  They're excluded from the course query every page uses and only read by the Enrollments page
+  and the join check, which compares in constant time. Wrong guesses aren't rate limited yet.
 - **Teachers edit all course details**, including category and visibility, because the permission
   table grants them "Edit course details". Only admins and managers can delete a course.
 - **Suspended enrollments grant nothing**, for teachers and students alike.
@@ -87,6 +95,27 @@ Choices made where the spec was ambiguous or the tooling forced a deviation. New
 - **Commit endpoint checks Origin/Sec-Fetch-Site.** SvelteKit's CSRF protection covers form
   actions, not `+server.ts` endpoints, and the endpoint must accept `text/plain` beacons.
   Session cookies are `SameSite=Lax` as well, so this is defense in depth.
+
+## Completion and locking
+
+- **Completion is set per activity**: _viewed_ (launched once), _completed_ (the SCO reports
+  completed or passed; the default, and the old behavior), or _passed_. An optional minimum score
+  must also be met. Scores are the SCO's raw score (`cmi.core.score.raw` / `cmi.score.raw`),
+  usually 0–100, so a minimum only makes sense for packages that report one; an attempt with no
+  score never meets it.
+- **Rules are applied when reading, not stored.** Changing a rule re-grades every learner's
+  latest attempt immediately; nothing is recalculated or migrated. All rules live in
+  `src/lib/server/completion.ts`, shared by the course page, dashboard, report, and launch guard.
+- **Locking is by prerequisite activities** in the same course. An activity unlocks once every
+  prerequisite meets its own completion rule. Saving a prerequisite that would form a loop is
+  rejected. Course progress counts every activity, locked or not; "Continue" skips locked ones.
+- **Locks are enforced on the server.** The launch page returns 403 for a locked activity, and the
+  content route only serves a package's files to people who have an attempt for it, which only
+  the launch page creates. Teachers, managers, and admins can preview locked activities.
+- **Locking an activity someone already finished** keeps it Completed, but they can't reopen it
+  until the new prerequisites are met.
+- Not built yet: date-based availability, course-level completion criteria (e.g. "only these
+  activities count"), and grade aggregation across attempts.
 
 ## Users
 

@@ -330,6 +330,11 @@
 			color: var(--color-success);
 			background: var(--color-success-bg);
 		}
+
+		&.warning {
+			color: var(--color-warning);
+			background: var(--color-warning-bg);
+		}
 	}
 
 	.badge {

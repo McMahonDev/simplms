@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SiteRole } from './auth-options.js';
-import { type AccessContext, type Capability, can, decide, siteRoleOf } from './permissions.js';
+import {
+	type AccessContext,
+	type Capability,
+	can,
+	canSelfEnroll,
+	decide,
+	siteRoleOf
+} from './permissions.js';
 
 vi.mock('./db/access.js', () => ({ getCourseAccessFacts: vi.fn() }));
 const { getCourseAccessFacts } = await import('./db/access.js');
@@ -157,6 +164,33 @@ describe('course-level edge cases', () => {
 	it('never lets a course role grant a site capability', () => {
 		expect(decide('courses:create', contextFor('teacher'))).toBe(false);
 		expect(decide('categories:manage', contextFor('teacher'))).toBe(false);
+	});
+});
+
+describe('canSelfEnroll', () => {
+	const open = { visible: true, enrollmentMethod: 'open' } as const;
+
+	it('lets anyone without an enrollment join open and key courses', () => {
+		expect(canSelfEnroll({ course: open, enrollment: null })).toBe(true);
+		expect(canSelfEnroll({ course: { ...open, enrollmentMethod: 'key' }, enrollment: null })).toBe(
+			true
+		);
+	});
+
+	it('refuses courses that only staff can assign', () => {
+		expect(
+			canSelfEnroll({ course: { ...open, enrollmentMethod: 'manual' }, enrollment: null })
+		).toBe(false);
+	});
+
+	it('refuses hidden courses', () => {
+		expect(canSelfEnroll({ course: { ...open, visible: false }, enrollment: null })).toBe(false);
+	});
+
+	it('refuses people who are already enrolled, including suspended learners', () => {
+		for (const status of ['active', 'suspended'] as const) {
+			expect(canSelfEnroll({ course: open, enrollment: { role: 'student', status } })).toBe(false);
+		}
 	});
 });
 

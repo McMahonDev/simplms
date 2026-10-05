@@ -88,3 +88,140 @@ test('a student cannot fetch SCORM files from a course they are not in', async (
 	const response = await page.request.get(src!);
 	expect(response.status()).toBe(403);
 });
+
+test('a teacher enrolls, suspends, and removes a student on the enrollments page', async ({
+	page
+}) => {
+	await signIn(page, 'teacher2@simplms.test');
+	await page.goto('/courses/golf-fundamentals');
+	await page.getByRole('link', { name: 'Enrollments' }).click();
+	await expect(page.getByRole('heading', { level: 1 })).toHaveText('Enrollments');
+	await expect(page.getByText('3 active students · 1 teacher')).toBeVisible();
+
+	// Enroll student5, who isn't in the course yet.
+	await page.getByLabel('Email').fill('student5@simplms.test');
+	await page.getByRole('button', { name: 'Enroll', exact: true }).click();
+	await expect(page.getByText('Enrolled student5@simplms.test.')).toBeVisible();
+	await expect(page.getByText('4 active students · 1 teacher')).toBeVisible();
+
+	// Search narrows the list to one person; suspend them.
+	await page.getByLabel('Search').fill('student5');
+	await page.getByRole('button', { name: 'Filter' }).click();
+	const rows = page.getByRole('table').getByRole('row');
+	await expect(rows).toHaveCount(2);
+	const row = rows.filter({ hasText: 'student5@simplms.test' });
+	await row.getByLabel(/^Status for/).selectOption('suspended');
+	await row.getByRole('button', { name: /^Save/ }).click();
+	await expect(row.getByText('Saved')).toBeVisible();
+	await expect(page.getByText('3 active students · 1 teacher · 1 suspended')).toBeVisible();
+
+	await row.getByRole('button', { name: /^Remove/ }).click();
+	await expect(page.getByText('Nobody matches these filters')).toBeVisible();
+	await expect(page.getByText('3 active students · 1 teacher')).toBeVisible();
+
+	// Students can't manage enrollments.
+	await signOut(page);
+	await signIn(page, 'student1@simplms.test');
+	const denied = await page.goto('/courses/golf-fundamentals/enrollments');
+	expect(denied?.status()).toBe(403);
+});
+
+test('learners join open and code-protected courses but not assigned-only ones', async ({
+	page
+}) => {
+	// student3 is only in Golf Fundamentals. Data Privacy Basics is open; Workplace Safety needs
+	// the code SAFETY-2026.
+	await signIn(page, 'student3@simplms.test');
+	await page.goto('/courses');
+
+	await page.getByRole('link', { name: 'Join Data Privacy Basics' }).click();
+	await page.getByRole('button', { name: 'Join course' }).click();
+	await expect(page.getByRole('heading', { name: 'Activities' })).toBeVisible();
+
+	await page.goto('/courses');
+	await page.getByRole('link', { name: 'Join with code Workplace Safety' }).click();
+	await page.getByLabel('Enrollment code').fill('wrong-code');
+	await page.getByRole('button', { name: 'Join course' }).click();
+	await expect(page.getByRole('alert')).toContainText('That code is not right');
+	await page.getByLabel('Enrollment code').fill('SAFETY-2026');
+	await page.getByRole('button', { name: 'Join course' }).click();
+	await expect(page.getByRole('heading', { name: 'Activities' })).toBeVisible();
+
+	const myCourses = page.getByRole('region', { name: 'My courses' });
+	await page.getByRole('link', { name: 'Dashboard' }).click();
+	await expect(myCourses.getByRole('heading', { name: 'Data Privacy Basics' })).toBeVisible();
+	await expect(myCourses.getByRole('heading', { name: 'Workplace Safety' })).toBeVisible();
+	await signOut(page);
+
+	// Golf Fundamentals is assigned-only: student4 can't open or join it.
+	await signIn(page, 'student4@simplms.test');
+	await page.goto('/courses');
+	await expect(page.getByText('Not enrolled. Ask a teacher to add you.')).toBeVisible();
+	const denied = await page.goto('/courses/golf-fundamentals');
+	expect(denied?.status()).toBe(403);
+	await signOut(page);
+
+	// The teacher opens Golf Fundamentals with a code; student4 can then join with it.
+	await signIn(page, 'teacher2@simplms.test');
+	await page.goto('/courses/golf-fundamentals/enrollments');
+	await page.getByRole('radio', { name: /Enrollment code/ }).check();
+	await page.getByRole('textbox', { name: 'Enrollment code' }).fill('FORE');
+	await page.getByRole('button', { name: 'Save method' }).click();
+	await expect(page.getByText('Enrollment method saved.')).toBeVisible();
+	await signOut(page);
+
+	await signIn(page, 'student4@simplms.test');
+	await page.goto('/courses/golf-fundamentals');
+	await page.getByLabel('Enrollment code').fill('FORE');
+	await page.getByRole('button', { name: 'Join course' }).click();
+	await expect(page.getByRole('heading', { name: 'Golf Explained (SCORM 1.2)' })).toBeVisible();
+});
+
+test('activities stay locked until prerequisites are complete; teachers set completion rules', async ({
+	page
+}) => {
+	// Seeded: Golf Explained (SCORM 2004) requires Golf Explained (SCORM 1.2).
+	await signIn(page, 'teacher2@simplms.test');
+	await page.goto('/courses/golf-fundamentals');
+	await page.getByRole('link', { name: 'Preview Golf Explained (SCORM 2004)' }).click();
+	await expect(page).toHaveURL(/\/scorm\//);
+	await expect(page.getByRole('heading', { name: 'Golf Explained (SCORM 2004)' })).toBeVisible();
+	const lockedUrl = new URL(page.url()).pathname;
+	const contentUrl = await page.locator('iframe.sco').getAttribute('src');
+
+	// Require a pass with 90+ on the 1.2 activity.
+	await page.goto('/courses/golf-fundamentals/manage');
+	const first = page.getByRole('listitem').filter({
+		has: page.getByRole('link', { name: 'Golf Explained (SCORM 1.2)', exact: true })
+	});
+	await first.locator('summary', { hasText: 'Settings' }).click();
+	await first.getByLabel('Complete when the learner').selectOption('passed');
+	await first.getByLabel(/Minimum score/).fill('90');
+	await first.getByRole('button', { name: 'Save settings' }).click();
+	await expect(first.getByText('Settings saved.')).toBeVisible();
+	await expect(first.getByText('Pass it with a score of at least 90')).toBeVisible();
+
+	// Making 1.2 require 2004 would lock both forever.
+	await first.getByRole('checkbox', { name: 'Golf Explained (SCORM 2004)' }).check();
+	await first.getByRole('button', { name: 'Save settings' }).click();
+	await expect(first.getByRole('alert')).toContainText('would create a loop');
+	await signOut(page);
+
+	// student2 hasn't started: 2004 is locked on the page, at its URL, and for its files.
+	await signIn(page, 'student2@simplms.test');
+	await page.goto('/courses/golf-fundamentals');
+	const activity = (title: string) =>
+		page.getByRole('listitem').filter({ has: page.getByRole('heading', { name: title }) });
+	const locked = activity('Golf Explained (SCORM 2004)');
+	await expect(locked.getByText('Locked', { exact: true })).toBeVisible();
+	await expect(locked.getByText('Complete Golf Explained (SCORM 1.2) first.')).toBeVisible();
+	await expect(locked.getByRole('link')).toHaveCount(0);
+	await expect(
+		activity('Golf Explained (SCORM 1.2)').getByText(
+			'To complete: pass it with a score of at least 90'
+		)
+	).toBeVisible();
+
+	expect((await page.goto(lockedUrl))?.status()).toBe(403);
+	expect((await page.request.get(contentUrl!)).status()).toBe(403);
+});

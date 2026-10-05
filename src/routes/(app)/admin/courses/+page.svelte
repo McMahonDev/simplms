@@ -101,7 +101,7 @@
 					<tr>
 						<th scope="col">Course</th>
 						<th scope="col">Category</th>
-						<th scope="col">Students</th>
+						<th scope="col">Active students</th>
 						<th scope="col">Activities</th>
 						<th scope="col">Visibility</th>
 						<th scope="col"><span class="visually-hidden">Actions</span></th>
@@ -112,7 +112,7 @@
 						<tr>
 							<td><a href="/courses/{c.slug}">{c.title}</a></td>
 							<td>{c.categoryName}</td>
-							<td>{c.students}</td>
+							<td><a href="/courses/{c.slug}/enrollments">{c.students}</a></td>
 							<td>{c.packages}</td>
 							<td>
 								<span class="badge {c.visible ? 'success' : 'warning'}">
@@ -121,6 +121,9 @@
 							</td>
 							<td class="actions">
 								<a class="button secondary small" href="/courses/{c.slug}/manage">Manage</a>
+								<a class="button secondary small" href="/courses/{c.slug}/enrollments"
+									>Enrollments</a
+								>
 								<a class="button secondary small" href="/courses/{c.slug}/report">Report</a>
 							</td>
 						</tr>

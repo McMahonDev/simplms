@@ -22,7 +22,10 @@
 
 	{#if data.rows.length === 0}
 		<EmptyState title="No students are enrolled">
-			<p>Enroll learners on the <a href="/courses/{data.course.slug}/manage">manage page</a>.</p>
+			<p>
+				Enroll learners on the <a href="/courses/{data.course.slug}/enrollments">enrollments page</a
+				>.
+			</p>
 		</EmptyState>
 	{:else}
 		<p class="muted">
@@ -43,6 +46,7 @@
 							<th scope="col">
 								{p.title}
 								<span class="muted version">SCORM {p.version}</span>
+								<span class="muted version">{p.criteria}</span>
 							</th>
 						{/each}
 						<th scope="col">Time</th>
@@ -71,9 +75,13 @@
 							</td>
 							{#each r.cells as cell, i (data.packages[i].id)}
 								<td>
-									<StatusBadge attempt={cell} />
-									{#if cell?.scoreRaw != null}
-										<span class="score">Score {cell.scoreRaw}</span>
+									{#if cell.locked && !cell.attempt}
+										<span class="badge">Locked</span>
+									{:else}
+										<StatusBadge attempt={cell.attempt} complete={cell.complete} />
+									{/if}
+									{#if cell.attempt?.scoreRaw != null}
+										<span class="score">Score {cell.attempt.scoreRaw}</span>
 									{/if}
 								</td>
 							{/each}

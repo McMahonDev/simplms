@@ -15,6 +15,20 @@
 			"when": 1790943745244,
 			"tag": "0001_attempt_session",
 			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "7",
+			"when": 1791208051521,
+			"tag": "0002_course_enrollment_method",
+			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "7",
+			"when": 1791210085400,
+			"tag": "0003_activity_completion",
+			"breakpoints": true
 		}
 	]
 }
