@@ -131,9 +131,16 @@ Choices made where the spec was ambiguous or the tooling forced a deviation. New
 ## Notifications and scheduled jobs
 
 - **Notifications are rows, not deliveries.** `notification` holds one message for one person,
-  shown in the app (header count and `/notifications`). Email or push would be added as a job
-  that delivers unsent rows and records its own sent state, without changing call sites.
-  Message text lives in typed builders in `src/lib/server/notifications.ts`.
+  shown in the app (header count and `/notifications`). Message text lives in typed builders in
+  `src/lib/server/notifications.ts`; each delivery channel is a job that records its own state.
+- **Email is a delivery job.** `deliver-email` runs every minute and moves each pending
+  notification to `sent`, `skipped` (the person turned that type off at
+  `/notifications/settings`, or is banned), or, after failed sends retried at 1, 5, 30, and 120
+  minutes, `failed`. A row is never emailed twice. Notifications created before email existed
+  were marked `skipped` by the migration, so nobody gets a backlog.
+- **Mail transports are pluggable** (`src/lib/server/mail`). `MAIL_TRANSPORT=log` (the default)
+  prints emails to the server log; `resend` uses Resend's HTTP API. Another provider is one
+  `Mailer` implementation. Email is on by default for every type; preferences store opt-outs.
 - **Sent today:** a teacher enrolling someone, a teacher granting an extra attempt, and a weekly
   reminder for unfinished courses left idle 7 days. Self-enrollment doesn't notify (the learner
   did it).
@@ -144,7 +151,8 @@ Choices made where the spec was ambiguous or the tooling forced a deviation. New
 - **Jobs run inside the app server.** The `init` hook starts a one-minute timer
   (`JOBS_SCHEDULER`, on by default). Each job has a row in `job`; a server claims a due job with
   a single `UPDATE … SET locked_until` so several instances never run it twice, and a crashed run
-  is retried after the 15-minute lock expires. Jobs reuse the app's database module, which reads
+  is retried after the 15-minute lock expires. In `pnpm dev`, restart the dev server after adding
+  a job: code reloads don't re-run `init`, so the running timer keeps the old job list. Jobs reuse the app's database module, which reads
   config through SvelteKit, so there's no standalone CLI runner.
 - **External cron:** with `JOBS_SCHEDULER=false`, call `POST /api/jobs/run` with
   `Authorization: Bearer $CRON_SECRET` (disabled unless the secret is set). Admins can see last

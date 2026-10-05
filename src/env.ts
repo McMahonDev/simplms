@@ -16,5 +16,8 @@ export const variables = defineEnvVars({
 	SCORM_MAX_UNCOMPRESSED_MB: { schema: envSchema.SCORM_MAX_UNCOMPRESSED_MB },
 	SCORM_MAX_FILES: { schema: envSchema.SCORM_MAX_FILES },
 	JOBS_SCHEDULER: { schema: envSchema.JOBS_SCHEDULER },
-	CRON_SECRET: { schema: envSchema.CRON_SECRET }
+	CRON_SECRET: { schema: envSchema.CRON_SECRET },
+	MAIL_TRANSPORT: { schema: envSchema.MAIL_TRANSPORT },
+	MAIL_FROM: { schema: envSchema.MAIL_FROM },
+	RESEND_API_KEY: { schema: envSchema.RESEND_API_KEY }
 });

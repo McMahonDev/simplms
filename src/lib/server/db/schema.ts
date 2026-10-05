@@ -223,7 +223,7 @@ export const notification = pgTable(
 		userId: uuid('user_id')
 			.notNull()
 			.references(() => user.id, { onDelete: 'cascade' }),
-		/** What kind of event, e.g. "enrollment.added" (see notifications/types.ts). */
+		/** What kind of event, e.g. "enrollment.added" (see notifications.ts). */
 		type: text('type').notNull(),
 		title: text('title').notNull(),
 		body: text('body').notNull().default(''),
@@ -235,14 +235,42 @@ export const notification = pgTable(
 		 */
 		dedupeKey: text('dedupe_key'),
 		readAt: timestamp('read_at', { withTimezone: true }),
+		/**
+		 * Email delivery (jobs/deliver-email.ts): null while pending, then sent, skipped (the
+		 * person turned email off), or failed after the last retry.
+		 */
+		emailStatus: text('email_status').$type<'sent' | 'skipped' | 'failed'>(),
+		emailAttempts: integer('email_attempts').notNull().default(0),
+		/** When a failed send may be retried. */
+		emailRetryAt: timestamp('email_retry_at', { withTimezone: true }),
+		emailedAt: timestamp('emailed_at', { withTimezone: true }),
+		emailError: text('email_error'),
 		...timestamps()
 	},
 	(t) => [
 		index().on(t.userId, t.createdAt),
+		// The delivery job scans only pending rows.
+		index('notification_email_pending_idx')
+			.on(t.createdAt)
+			.where(sql`${t.emailStatus} is null`),
 		uniqueIndex('notification_user_dedupe_uq')
 			.on(t.userId, t.dedupeKey)
 			.where(sql`${t.dedupeKey} is not null`)
 	]
+);
+
+/** A person's choice to turn email off (or back on) for one notification type. Default is on. */
+export const notificationPreference = pgTable(
+	'notification_preference',
+	{
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		type: text('type').notNull(),
+		email: boolean('email').notNull(),
+		...timestamps()
+	},
+	(t) => [primaryKey({ columns: [t.userId, t.type] })]
 );
 
 /**

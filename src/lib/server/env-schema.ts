@@ -40,7 +40,12 @@ export const envSchema = {
 	/** Run scheduled jobs inside the app server (see src/lib/server/jobs). */
 	JOBS_SCHEDULER: booleanString.default(true),
 	/** Bearer token for POST /api/jobs/run (external cron). Unset disables the endpoint. */
-	CRON_SECRET: z.string().min(16).optional()
+	CRON_SECRET: z.string().min(16).optional(),
+	/** How notification emails are sent: "log" prints them (dev), "resend" uses Resend's API. */
+	MAIL_TRANSPORT: z.enum(['log', 'resend']).default('log'),
+	MAIL_FROM: z.string().min(3).default('SimpLMS <no-reply@simplms.test>'),
+	/** Required when MAIL_TRANSPORT is "resend". */
+	RESEND_API_KEY: z.string().min(1).optional()
 } as const;
 
 export const envObjectSchema = z.object(envSchema);

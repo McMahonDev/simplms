@@ -1,13 +1,32 @@
 /**
  * Notifications: one typed builder per kind of message, plus `notify()` to store them.
  *
- * Today they're shown in the app (the bell in the header and /notifications). To add email or
- * push later, add a delivery job that reads undelivered rows and records its own sent state;
- * the builders and call sites stay the same.
+ * They're shown in the app (the header link and /notifications) and emailed by the
+ * deliver-email job, unless the person turned email off for that type. Another channel (push,
+ * chat) would be another delivery job with its own sent state; call sites stay the same.
  */
 import { createNotifications } from './db/notifications.js';
 
 export type NotificationType = 'enrollment.added' | 'attempt.granted' | 'course.reminder';
+
+/** Every type, with the wording people see on their notification settings page. */
+export const notificationTypes: { type: NotificationType; label: string; description: string }[] = [
+	{
+		type: 'enrollment.added',
+		label: 'Added to a course',
+		description: 'A teacher or admin enrolled you in a course.'
+	},
+	{
+		type: 'attempt.granted',
+		label: 'Extra attempt',
+		description: 'A teacher gave you another attempt at an activity.'
+	},
+	{
+		type: 'course.reminder',
+		label: 'Course reminders',
+		description: "A weekly nudge about a course you haven't finished."
+	}
+];
 
 export type NewNotification = {
 	userId: string;

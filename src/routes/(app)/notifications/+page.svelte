@@ -14,11 +14,14 @@
 <div class="stack">
 	<div class="head">
 		<h1>Notifications</h1>
-		{#if unread > 0}
-			<form method="POST" action="?/readAll" use:enhance>
-				<button type="submit" class="secondary small">Mark all as read</button>
-			</form>
-		{/if}
+		<div class="cluster">
+			{#if unread > 0}
+				<form method="POST" action="?/readAll" use:enhance>
+					<button type="submit" class="secondary small">Mark all as read</button>
+				</form>
+			{/if}
+			<a class="button secondary small" href="/notifications/settings">Email settings</a>
+		</div>
 	</div>
 
 	{#if data.notifications.length === 0}

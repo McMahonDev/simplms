@@ -323,3 +323,27 @@ test('teachers grant extra attempts; learners are notified; admins run jobs', as
 	await signIn(page, 'manager@simplms.test');
 	expect((await page.goto('/admin/jobs'))?.status()).toBe(403);
 });
+
+test('people choose which notifications are emailed; the delivery job sends the rest', async ({
+	page
+}) => {
+	await signIn(page, 'student1@simplms.test');
+	await page.goto('/notifications');
+	await page.getByRole('link', { name: 'Email settings' }).click();
+	const reminders = page.getByRole('checkbox', { name: /Course reminders/ });
+	await expect(reminders).toBeChecked();
+	await reminders.uncheck();
+	await page.getByRole('button', { name: 'Save' }).click();
+	await expect(page.getByText('Saved.')).toBeVisible();
+	await page.reload();
+	await expect(page.getByRole('checkbox', { name: /Course reminders/ })).not.toBeChecked();
+	await expect(page.getByRole('checkbox', { name: /Extra attempt/ })).toBeChecked();
+	await signOut(page);
+
+	// Earlier tests created notifications; the log transport "sends" them.
+	await signIn(page, 'admin@simplms.test');
+	await page.goto('/admin/jobs');
+	const job = page.getByRole('row').filter({ hasText: 'deliver-email' });
+	await job.getByRole('button', { name: /Run now/ }).click();
+	await expect(job.getByText(/^Done: \d+ sent, \d+ skipped, 0 failed \(via log\)$/)).toBeVisible();
+});
