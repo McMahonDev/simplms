@@ -347,3 +347,40 @@ test('people choose which notifications are emailed; the delivery job sends the 
 	await job.getByRole('button', { name: /Run now/ }).click();
 	await expect(job.getByText(/^Done: \d+ sent, \d+ skipped, 0 failed \(via log\)$/)).toBeVisible();
 });
+
+test('enrollment code guesses are rate limited', async ({ page }) => {
+	// student2 isn't in Workplace Safety, which needs the code SAFETY-2026.
+	await signIn(page, 'student2@simplms.test');
+	await page.goto('/courses/workplace-safety');
+	const code = page.getByLabel('Enrollment code');
+	const join = page.getByRole('button', { name: 'Join course' });
+	for (let i = 0; i < 5; i++) {
+		await code.fill(`wrong-${i}`);
+		await join.click();
+		await expect(page.getByRole('alert')).toContainText('That code is not right');
+	}
+
+	// The sixth try is refused before the code is even checked, so the right code fails too.
+	await code.fill('SAFETY-2026');
+	await join.click();
+	await expect(page.getByRole('alert')).toContainText('Too many tries. Try again in 15 minutes');
+	await expect(page.getByRole('heading', { name: 'Join this course' })).toBeVisible();
+});
+
+test('parallel enrollment code guesses cannot get past the limit', async ({ page }) => {
+	await signIn(page, 'student5@simplms.test');
+	const origin = new URL(page.url()).origin;
+	const guesses = await Promise.all(
+		Array.from({ length: 20 }, (_, i) =>
+			page.request
+				.post('/courses/workplace-safety?/join', {
+					form: { key: `burst-${i}` },
+					headers: { origin, 'x-sveltekit-action': 'true' }
+				})
+				.then((r) => r.text())
+		)
+	);
+	// Exactly five guesses were checked; the other fifteen were refused before checking.
+	expect(guesses.filter((t) => t.includes('That code is not right'))).toHaveLength(5);
+	expect(guesses.filter((t) => t.includes('Too many tries'))).toHaveLength(15);
+});
