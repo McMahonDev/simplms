@@ -9,7 +9,7 @@ const progress = (p: Partial<CourseProgress>): CourseProgress => ({
 	total: 3,
 	completed: 1,
 	percent: 33,
-	nextPackageId: 'b',
+	nextActivityId: 'b',
 	started: true,
 	...p
 });
@@ -24,11 +24,11 @@ describe('needsReminder', () => {
 	});
 
 	it('skips finished courses, empty courses, and courses where everything left is locked', () => {
-		expect(needsReminder(progress({ completed: 3, nextPackageId: null }), daysAgo(30), now)).toBe(
+		expect(needsReminder(progress({ completed: 3, nextActivityId: null }), daysAgo(30), now)).toBe(
 			false
 		);
 		expect(needsReminder(progress({ total: 0, completed: 0 }), daysAgo(30), now)).toBe(false);
-		expect(needsReminder(progress({ nextPackageId: null }), daysAgo(30), now)).toBe(false);
+		expect(needsReminder(progress({ nextActivityId: null }), daysAgo(30), now)).toBe(false);
 	});
 });
 

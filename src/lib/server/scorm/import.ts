@@ -12,17 +12,17 @@ const MAX_MANIFEST_BYTES = 10 * 1024 * 1024;
 
 export type ImportedPackage = ParsedManifest & { storageKey: string; files: number; bytes: number };
 
-export function storageKeyFor(packageId: string) {
-	return `scorm/${packageId}`;
+export function storageKeyFor(activityId: string) {
+	return `scorm/${activityId}`;
 }
 
 export async function importScormZip(options: {
 	zipPath: string;
-	packageId: string;
+	activityId: string;
 	storage: Storage;
 	limits: ExtractLimits;
 }): Promise<ImportedPackage> {
-	const { zipPath, packageId, storage, limits } = options;
+	const { zipPath, activityId, storage, limits } = options;
 
 	// Validate the manifest before writing anything to storage.
 	const manifestXml = await readZipEntry(zipPath, MANIFEST, MAX_MANIFEST_BYTES);
@@ -33,7 +33,7 @@ export async function importScormZip(options: {
 	}
 	const manifest = parseManifest(manifestXml.toString('utf8'));
 
-	const storageKey = storageKeyFor(packageId);
+	const storageKey = storageKeyFor(activityId);
 	try {
 		const extracted = await extractZip(zipPath, limits, (relativePath, body) =>
 			storage.put(`${storageKey}/${relativePath}`, body)

@@ -113,20 +113,28 @@ export const scormVersion = pgEnum('scorm_version', ['1.2', '2004']);
  */
 export const completionRule = pgEnum('completion_rule', ['viewed', 'completed', 'passed']);
 
-export const scormPackage = pgTable(
-	'scorm_package',
+/** What an activity is. Only SCORM exists so far; the others arrive with issue #13. */
+export const activityType = pgEnum('activity_type', [
+	'scorm',
+	'page',
+	'link',
+	'pdf',
+	'video',
+	'quiz'
+]);
+
+/** One item in a course: a SCORM package, page, video, quiz, and so on. */
+export const activity = pgTable(
+	'activity',
 	{
 		id: id(),
 		courseId: uuid('course_id')
 			.notNull()
 			.references(() => course.id, { onDelete: 'cascade' }),
+		type: activityType('type').notNull(),
 		title: text('title').notNull(),
-		version: scormVersion('version').notNull(),
-		/** Launch file of the first SCO, relative to the package root. */
-		entryHref: text('entry_href').notNull(),
-		/** Storage prefix holding the extracted files, e.g. "scorm/<id>". */
-		storageKey: text('storage_key').notNull(),
-		manifestJson: jsonb('manifest_json').notNull(),
+		/** Type-specific settings for simple types (validated per type). SCORM uses scorm_package. */
+		settings: jsonb('settings').notNull().default({}),
 		sortOrder: integer('sort_order').notNull().default(0),
 		completionRule: completionRule('completion_rule').notNull().default('completed'),
 		/** Passing score for the 'passed' rule; replaces the package's own pass mark when set. */
@@ -138,20 +146,33 @@ export const scormPackage = pgTable(
 	(t) => [index().on(t.courseId)]
 );
 
+/** The SCORM package behind a `scorm` activity. */
+export const scormPackage = pgTable('scorm_package', {
+	activityId: uuid('activity_id')
+		.primaryKey()
+		.references(() => activity.id, { onDelete: 'cascade' }),
+	version: scormVersion('version').notNull(),
+	/** Launch file of the first SCO, relative to the package root. */
+	entryHref: text('entry_href').notNull(),
+	/** Storage prefix holding the extracted files, e.g. "scorm/<activity id>". */
+	storageKey: text('storage_key').notNull(),
+	manifestJson: jsonb('manifest_json').notNull()
+});
+
 /** Activities that must be complete before another activity in the same course unlocks. */
 export const activityPrerequisite = pgTable(
 	'activity_prerequisite',
 	{
-		packageId: uuid('package_id')
+		activityId: uuid('activity_id')
 			.notNull()
-			.references(() => scormPackage.id, { onDelete: 'cascade' }),
-		requiredPackageId: uuid('required_package_id')
+			.references(() => activity.id, { onDelete: 'cascade' }),
+		requiredActivityId: uuid('required_activity_id')
 			.notNull()
-			.references(() => scormPackage.id, { onDelete: 'cascade' })
+			.references(() => activity.id, { onDelete: 'cascade' })
 	},
 	(t) => [
-		primaryKey({ columns: [t.packageId, t.requiredPackageId] }),
-		index().on(t.requiredPackageId)
+		primaryKey({ columns: [t.activityId, t.requiredActivityId] }),
+		index().on(t.requiredActivityId)
 	]
 );
 
@@ -159,19 +180,20 @@ export const activityPrerequisite = pgTable(
 export type CompletionStatus = 'completed' | 'incomplete' | 'not attempted' | 'unknown';
 export type SuccessStatus = 'passed' | 'failed' | 'unknown';
 
-export const scormAttempt = pgTable(
-	'scorm_attempt',
+/** One learner's try at an activity. Status, score, and time are shared by every type. */
+export const activityAttempt = pgTable(
+	'activity_attempt',
 	{
 		id: id(),
-		packageId: uuid('package_id')
+		activityId: uuid('activity_id')
 			.notNull()
-			.references(() => scormPackage.id, { onDelete: 'cascade' }),
+			.references(() => activity.id, { onDelete: 'cascade' }),
 		userId: uuid('user_id')
 			.notNull()
 			.references(() => user.id, { onDelete: 'cascade' }),
 		attemptNumber: integer('attempt_number').notNull().default(1),
-		/** Full CMI runtime state, replayed into scorm-again on relaunch. */
-		cmiJson: jsonb('cmi_json').notNull().default({}),
+		/** Type-specific state: SCORM's full CMI (replayed into scorm-again on relaunch). */
+		data: jsonb('data').notNull().default({}),
 		completionStatus: text('completion_status')
 			.$type<CompletionStatus>()
 			.notNull()
@@ -191,7 +213,7 @@ export const scormAttempt = pgTable(
 		...timestamps()
 	},
 	(t) => [
-		unique('scorm_attempt_pkg_user_num_uq').on(t.packageId, t.userId, t.attemptNumber),
+		unique('activity_attempt_activity_user_num_uq').on(t.activityId, t.userId, t.attemptNumber),
 		index().on(t.userId)
 	]
 );
@@ -200,16 +222,16 @@ export const scormAttempt = pgTable(
 export const attemptGrant = pgTable(
 	'attempt_grant',
 	{
-		packageId: uuid('package_id')
+		activityId: uuid('activity_id')
 			.notNull()
-			.references(() => scormPackage.id, { onDelete: 'cascade' }),
+			.references(() => activity.id, { onDelete: 'cascade' }),
 		userId: uuid('user_id')
 			.notNull()
 			.references(() => user.id, { onDelete: 'cascade' }),
 		extraAttempts: integer('extra_attempts').notNull().default(0),
 		...timestamps()
 	},
-	(t) => [primaryKey({ columns: [t.packageId, t.userId] })]
+	(t) => [primaryKey({ columns: [t.activityId, t.userId] })]
 );
 
 /**
@@ -309,8 +331,10 @@ export type Enrollment = typeof enrollment.$inferSelect;
 export type EnrollmentMethod = (typeof enrollmentMethod.enumValues)[number];
 export type EnrollmentRole = (typeof enrollmentRole.enumValues)[number];
 export type EnrollmentStatus = (typeof enrollmentStatus.enumValues)[number];
+export type Activity = typeof activity.$inferSelect;
+export type ActivityType = (typeof activityType.enumValues)[number];
 export type ScormPackage = typeof scormPackage.$inferSelect;
 export type Notification = typeof notification.$inferSelect;
 export type CompletionRule = (typeof completionRule.enumValues)[number];
 export type ScormVersion = (typeof scormVersion.enumValues)[number];
-export type ScormAttempt = typeof scormAttempt.$inferSelect;
+export type ActivityAttempt = typeof activityAttempt.$inferSelect;

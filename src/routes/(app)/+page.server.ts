@@ -1,4 +1,4 @@
-import { attemptHistory, myEnrollments, packagesForCourses } from '#lib/server/db/progress.js';
+import { activitiesForCourses, attemptHistory, myEnrollments } from '#lib/server/db/progress.js';
 import { requireUser } from '#lib/server/guards.js';
 import { decide, siteRoleOf } from '#lib/server/permissions.js';
 import { summarizeProgress } from '#lib/server/progress-summary.js';
@@ -17,16 +17,16 @@ export const load: PageServerLoad = async (event) => {
 		})
 	);
 
-	const packages = await packagesForCourses(enrollments.map((e) => e.courseId));
+	const activities = await activitiesForCourses(enrollments.map((e) => e.courseId));
 	const attempts = await attemptHistory(
-		packages.map((p) => p.id),
+		activities.map((p) => p.id),
 		[user.id]
 	);
 
 	const courses = enrollments.map((e) => {
-		const coursePackages = packages.filter((p) => p.courseId === e.courseId);
-		const progress = summarizeProgress(coursePackages, attempts, user.id);
-		const next = coursePackages.find((p) => p.id === progress.nextPackageId);
+		const courseActivities = activities.filter((p) => p.courseId === e.courseId);
+		const progress = summarizeProgress(courseActivities, attempts, user.id);
+		const next = courseActivities.find((p) => p.id === progress.nextActivityId);
 		return {
 			id: e.courseId,
 			title: e.title,

@@ -9,10 +9,10 @@
 
 	const details = $derived(resultFor(form, 'details'));
 	const uploaded = $derived(resultFor(form, 'upload'));
-	const packageResult = $derived(
-		resultFor(form, 'deletePackage') ??
-			resultFor(form, 'movePackage') ??
-			resultFor(form, 'renamePackage')
+	const activityResult = $derived(
+		resultFor(form, 'deleteActivity') ??
+			resultFor(form, 'moveActivity') ??
+			resultFor(form, 'renameActivity')
 	);
 	let uploading = $state(false);
 </script>
@@ -100,25 +100,25 @@
 				{uploaded.message}
 			</p>
 		{/if}
-		{#if packageResult?.message}
-			<p class="alert {packageResult.ok ? 'success' : 'error'}" role="status">
-				{packageResult.message}
+		{#if activityResult?.message}
+			<p class="alert {activityResult.ok ? 'success' : 'error'}" role="status">
+				{activityResult.message}
 			</p>
 		{/if}
 
-		{#if data.packages.length === 0}
+		{#if data.activities.length === 0}
 			<EmptyState title="No activities yet">
 				<p>Upload a SCORM package to give learners something to launch.</p>
 			</EmptyState>
 		{:else}
-			<ol class="packages">
-				{#each data.packages as p, i (p.id)}
+			<ol class="activities">
+				{#each data.activities as p, i (p.id)}
 					{@const settings = resultFor(form, 'activitySettings', p.id)}
-					<li class="package">
-						<div class="package-head">
+					<li class="activity">
+						<div class="activity-head">
 							<span class="order" aria-hidden="true">{i + 1}</span>
-							<div class="package-title">
-								<a href="/courses/{data.course.slug}/scorm/{p.id}">{p.title}</a>
+							<div class="activity-title">
+								<a href="/courses/{data.course.slug}/activities/{p.id}">{p.title}</a>
 								<span class="badge">SCORM {p.version}</span>
 								<span class="muted rules">
 									{p.criteria}{#if p.maxAttempts}
@@ -129,20 +129,20 @@
 								</span>
 							</div>
 							<div class="cluster">
-								<form method="POST" action="?/movePackage" use:enhance>
-									<input type="hidden" name="packageId" value={p.id} />
+								<form method="POST" action="?/moveActivity" use:enhance>
+									<input type="hidden" name="activityId" value={p.id} />
 									<input type="hidden" name="direction" value="up" />
 									<button type="submit" class="secondary small" disabled={i === 0}>
 										↑<span class="visually-hidden">Move {p.title} up</span>
 									</button>
 								</form>
-								<form method="POST" action="?/movePackage" use:enhance>
-									<input type="hidden" name="packageId" value={p.id} />
+								<form method="POST" action="?/moveActivity" use:enhance>
+									<input type="hidden" name="activityId" value={p.id} />
 									<input type="hidden" name="direction" value="down" />
 									<button
 										type="submit"
 										class="secondary small"
-										disabled={i === data.packages.length - 1}
+										disabled={i === data.activities.length - 1}
 									>
 										↓<span class="visually-hidden">Move {p.title} down</span>
 									</button>
@@ -151,9 +151,9 @@
 						</div>
 						<details>
 							<summary>Settings</summary>
-							<div class="package-edit">
+							<div class="activity-edit">
 								<form method="POST" action="?/activitySettings" use:enhance class="stack">
-									<input type="hidden" name="packageId" value={p.id} />
+									<input type="hidden" name="activityId" value={p.id} />
 									<fieldset class="settings">
 										<legend>Completion</legend>
 										<label>
@@ -206,11 +206,11 @@
 											>
 										</label>
 									</fieldset>
-									{#if data.packages.length > 1}
+									{#if data.activities.length > 1}
 										<fieldset class="settings">
 											<legend>Locked until these are complete</legend>
 											<div class="prereqs">
-												{#each data.packages.filter((o) => o.id !== p.id) as other (other.id)}
+												{#each data.activities.filter((o) => o.id !== p.id) as other (other.id)}
 													<label class="checkbox">
 														<input
 															type="checkbox"
@@ -235,16 +235,16 @@
 									</div>
 								</form>
 								<hr />
-								<form method="POST" action="?/renamePackage" use:enhance class="cluster">
-									<input type="hidden" name="packageId" value={p.id} />
+								<form method="POST" action="?/renameActivity" use:enhance class="cluster">
+									<input type="hidden" name="activityId" value={p.id} />
 									<label class="grow">
 										<span class="visually-hidden">Title for {p.title}</span>
 										<input name="title" required maxlength="200" value={p.title} />
 									</label>
 									<button type="submit" class="secondary small">Rename</button>
 								</form>
-								<form method="POST" action="?/deletePackage" class="cluster">
-									<input type="hidden" name="packageId" value={p.id} />
+								<form method="POST" action="?/deleteActivity" class="cluster">
+									<input type="hidden" name="activityId" value={p.id} />
 									<label class="checkbox">
 										<input type="checkbox" required />
 										Also deletes learner progress
@@ -321,14 +321,14 @@
 		}
 	}
 
-	.packages {
+	.activities {
 		list-style: none;
 		padding: 0;
 		display: grid;
 		gap: var(--space-xs);
 	}
 
-	.package {
+	.activity {
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-s);
 		padding: var(--space-s);
@@ -342,7 +342,7 @@
 		}
 	}
 
-	.package-head {
+	.activity-head {
 		display: flex;
 		align-items: center;
 		gap: var(--space-s);
@@ -360,7 +360,7 @@
 		font-weight: 700;
 	}
 
-	.package-title {
+	.activity-title {
 		flex: 1 1 12rem;
 		display: flex;
 		gap: var(--space-xs);
@@ -368,7 +368,7 @@
 		flex-wrap: wrap;
 	}
 
-	.package-edit {
+	.activity-edit {
 		display: grid;
 		gap: var(--space-s);
 		padding-block-start: var(--space-s);

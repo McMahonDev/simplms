@@ -183,26 +183,30 @@ async function seedGolfPackages() {
 		const id = randomUUID();
 		const imported = await importScormZip({
 			zipPath: fileURLToPath(new URL(`../fixtures/scorm/${p.file}`, import.meta.url)),
-			packageId: id,
+			activityId: id,
 			storage,
 			limits: { maxFiles: env.SCORM_MAX_FILES, maxTotalBytes: env.SCORM_MAX_UNCOMPRESSED_MB }
 		});
-		await db.insert(t.scormPackage).values({
+		await db.insert(t.activity).values({
 			id,
 			courseId: golf.id,
+			type: 'scorm',
 			title: p.title,
+			sortOrder
+		});
+		await db.insert(t.scormPackage).values({
+			activityId: id,
 			version: imported.version,
 			entryHref: imported.entryHref,
 			storageKey: imported.storageKey,
-			manifestJson: imported.json,
-			sortOrder
+			manifestJson: imported.json
 		});
 		ids.push(id);
 	}
 	// The 2004 version stays locked until the 1.2 version is complete.
 	await db
 		.insert(t.activityPrerequisite)
-		.values({ packageId: ids[1]!, requiredPackageId: ids[0]! });
+		.values({ activityId: ids[1]!, requiredActivityId: ids[0]! });
 }
 
 main()

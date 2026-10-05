@@ -5,7 +5,7 @@ import { findCourse, requireSelfEnroll } from '#lib/server/course-context.js';
 import { checkEnrollmentKey } from '#lib/server/db/courses.js';
 import { startNewAttempt } from '#lib/server/db/attempts.js';
 import { EnrollmentError, enrollUser } from '#lib/server/db/enrollments.js';
-import { packagesWithProgress } from '#lib/server/db/progress.js';
+import { activitiesWithProgress } from '#lib/server/db/progress.js';
 import { consumeRateLimit, resetRateLimit } from '#lib/server/db/rate-limits.js';
 import { can, capabilitiesFor } from '#lib/server/permissions.js';
 import { type RateLimit, describeWait } from '#lib/server/rate-limit.js';
@@ -32,7 +32,7 @@ export const load: PageServerLoad = async (event) => {
 		return { course, activities: [], caps, join: { method: course.enrollmentMethod } };
 	}
 
-	const activities = (await packagesWithProgress(course.id, user.id)).map((a) => ({
+	const activities = (await activitiesWithProgress(course.id, user.id)).map((a) => ({
 		...a,
 		criteria: describeCriteria(a)
 	}));
@@ -56,7 +56,7 @@ const joinSchema = z.object({
 	key: z.string().trim().max(100).optional()
 });
 
-const retakeSchema = z.object({ packageId: formFields.uuid() });
+const retakeSchema = z.object({ activityId: formFields.uuid() });
 
 export const actions: Actions = {
 	retake: async (event) => {
@@ -69,7 +69,9 @@ export const actions: Actions = {
 		}
 		const parsed = parseForm(retakeSchema, await event.request.formData());
 		const activity = parsed.ok
-			? (await packagesWithProgress(course.id, user.id)).find((a) => a.id === parsed.data.packageId)
+			? (await activitiesWithProgress(course.id, user.id)).find(
+					(a) => a.id === parsed.data.activityId
+				)
 			: undefined;
 		if (!activity) return fail(404, { action: 'retake', ...formError('Activity not found.') });
 
@@ -93,7 +95,7 @@ export const actions: Actions = {
 			});
 		}
 		await startNewAttempt(activity.id, user.id);
-		redirect(303, `/courses/${course.slug}/scorm/${activity.id}`);
+		redirect(303, `/courses/${course.slug}/activities/${activity.id}`);
 	},
 
 	join: async (event) => {

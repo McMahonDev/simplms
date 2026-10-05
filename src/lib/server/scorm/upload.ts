@@ -7,7 +7,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as NodeWebReadableStream } from 'node:stream/web';
 import { SCORM_MAX_FILES, SCORM_MAX_UNCOMPRESSED_MB, SCORM_MAX_UPLOAD_MB } from '$app/env/private';
-import { createPackage } from '../db/packages.js';
+import { createScormActivity } from '../db/activities.js';
 import { storage } from '../storage/index.js';
 import { ScormImportError } from './errors.js';
 import { importScormZip } from './import.js';
@@ -16,7 +16,8 @@ import { importScormZip } from './import.js';
 export const maxUploadBytes = SCORM_MAX_UPLOAD_MB;
 
 /**
- * Validates an uploaded zip, extracts it into storage, and records the package.
+ * Validates an uploaded zip, extracts it into storage, and adds it to the course as a SCORM
+ * activity.
  * yauzl needs random access, so the upload is spooled to a temp file first.
  */
 export async function ingestScormUpload(courseId: string, file: File, title?: string) {
@@ -37,17 +38,17 @@ export async function ingestScormUpload(courseId: string, file: File, title?: st
 			createWriteStream(tempPath)
 		);
 
-		const packageId = randomUUID();
+		const activityId = randomUUID();
 		const imported = await importScormZip({
 			zipPath: tempPath,
-			packageId,
+			activityId,
 			storage,
 			limits: { maxFiles: SCORM_MAX_FILES, maxTotalBytes: SCORM_MAX_UNCOMPRESSED_MB }
 		});
 
 		try {
-			return await createPackage({
-				id: packageId,
+			return await createScormActivity({
+				id: activityId,
 				courseId,
 				title: title || imported.title,
 				version: imported.version,

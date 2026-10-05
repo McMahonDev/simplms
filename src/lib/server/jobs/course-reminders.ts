@@ -3,7 +3,7 @@
  * once they haven't opened any of its activities for IDLE_DAYS (or since enrolling).
  */
 import { activeStudentEnrollments } from '../db/enrollments.js';
-import { attemptHistory, packagesForCourses } from '../db/progress.js';
+import { attemptHistory, activitiesForCourses } from '../db/progress.js';
 import { messages, notify } from '../notifications.js';
 import { type CourseProgress, summarizeProgress } from '../progress-summary.js';
 import type { Job } from './types.js';
@@ -32,7 +32,7 @@ export function needsReminder(
 	idleDays = IDLE_DAYS
 ): boolean {
 	if (progress.total === 0 || progress.completed === progress.total) return false;
-	if (!progress.nextPackageId) return false; // Everything left is locked.
+	if (!progress.nextActivityId) return false; // Everything left is locked.
 	return now.getTime() - lastActivity.getTime() >= idleDays * DAY_MS;
 }
 
@@ -43,19 +43,19 @@ export const courseReminders: Job = {
 	async run(now) {
 		const enrollments = await activeStudentEnrollments();
 		const courseIds = [...new Set(enrollments.map((e) => e.courseId))];
-		const packages = await packagesForCourses(courseIds);
+		const activities = await activitiesForCourses(courseIds);
 		const history = await attemptHistory(
-			packages.map((p) => p.id),
+			activities.map((p) => p.id),
 			[...new Set(enrollments.map((e) => e.userId))]
 		);
 
 		const due = enrollments.filter((e) => {
-			const coursePackages = packages.filter((p) => p.courseId === e.courseId);
-			const accesses = coursePackages
+			const courseActivities = activities.filter((p) => p.courseId === e.courseId);
+			const accesses = courseActivities
 				.flatMap((p) => history.get(`${p.id}:${e.userId}`) ?? [])
 				.map((a) => a.lastAccessedAt?.getTime() ?? 0);
 			const last = new Date(Math.max(e.enrolledAt.getTime(), ...accesses));
-			return needsReminder(summarizeProgress(coursePackages, history, e.userId), last, now);
+			return needsReminder(summarizeProgress(courseActivities, history, e.userId), last, now);
 		});
 
 		const week = isoWeek(now);

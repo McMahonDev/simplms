@@ -4,11 +4,11 @@ import type { AttemptSummary } from './db/progress.js';
 import { summarizeProgress } from './progress-summary.js';
 
 const attempt = (
-	packageId: string,
+	activityId: string,
 	completionStatus: AttemptSummary['completionStatus'],
 	successStatus: AttemptSummary['successStatus'] = 'unknown'
 ): AttemptSummary => ({
-	packageId,
+	activityId,
 	userId: 'u',
 	attemptNumber: 1,
 	completionStatus,
@@ -27,7 +27,7 @@ const activity = (id: string, rules: Partial<ActivityRules> = {}): ActivityRules
 	...rules
 });
 
-const packages = [activity('a'), activity('b'), activity('c')];
+const activities = [activity('a'), activity('b'), activity('c')];
 
 describe('summarizeProgress', () => {
 	it('handles courses with no activities', () => {
@@ -35,7 +35,7 @@ describe('summarizeProgress', () => {
 			total: 0,
 			completed: 0,
 			percent: 0,
-			nextPackageId: null,
+			nextActivityId: null,
 			started: false
 		});
 	});
@@ -45,20 +45,20 @@ describe('summarizeProgress', () => {
 			['a:u', [attempt('a', 'incomplete', 'passed')]],
 			['b:u', [attempt('b', 'incomplete')]]
 		]);
-		expect(summarizeProgress(packages, attempts, 'u')).toEqual({
+		expect(summarizeProgress(activities, attempts, 'u')).toEqual({
 			total: 3,
 			completed: 1,
 			percent: 33,
-			nextPackageId: 'b',
+			nextActivityId: 'b',
 			started: true
 		});
 	});
 
 	it('reports 100% with no next activity when everything is done', () => {
-		const attempts = new Map(packages.map((p) => [`${p.id}:u`, [attempt(p.id, 'completed')]]));
-		const result = summarizeProgress(packages, attempts, 'u');
+		const attempts = new Map(activities.map((p) => [`${p.id}:u`, [attempt(p.id, 'completed')]]));
+		const result = summarizeProgress(activities, attempts, 'u');
 		expect(result.percent).toBe(100);
-		expect(result.nextPackageId).toBeNull();
+		expect(result.nextActivityId).toBeNull();
 	});
 
 	it("applies each activity's own rule", () => {
@@ -69,7 +69,7 @@ describe('summarizeProgress', () => {
 		]);
 		const result = summarizeProgress(strict, attempts, 'u');
 		expect(result.completed).toBe(1);
-		expect(result.nextPackageId).toBe('a');
+		expect(result.nextActivityId).toBe('a');
 	});
 
 	it('skips locked activities when choosing the next one', () => {
@@ -80,10 +80,10 @@ describe('summarizeProgress', () => {
 			activity('c')
 		];
 		const failed = new Map([['a:u', [attempt('a', 'completed', 'failed')]]]);
-		expect(summarizeProgress(gated, failed, 'u').nextPackageId).toBe('a');
+		expect(summarizeProgress(gated, failed, 'u').nextActivityId).toBe('a');
 
 		// With a done-but-not-passed a moved last, b is still locked, so c is next.
 		const reordered = [gated[1]!, gated[2]!, gated[0]!];
-		expect(summarizeProgress(reordered, failed, 'u').nextPackageId).toBe('c');
+		expect(summarizeProgress(reordered, failed, 'u').nextActivityId).toBe('c');
 	});
 });

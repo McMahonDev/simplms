@@ -113,7 +113,7 @@
 							<td><a href="/courses/{c.slug}">{c.title}</a></td>
 							<td>{c.categoryName}</td>
 							<td><a href="/courses/{c.slug}/enrollments">{c.students}</a></td>
-							<td>{c.packages}</td>
+							<td>{c.activities}</td>
 							<td>
 								<span class="badge {c.visible ? 'success' : 'warning'}">
 									{c.visible ? 'Visible' : 'Hidden'}

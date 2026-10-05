@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { loadCourseFor } from '#lib/server/course-context.js';
 import { attemptGrants, grantAttempt } from '#lib/server/db/attempts.js';
 import { listStudents } from '#lib/server/db/enrollments.js';
-import { attemptHistory, listPackages } from '#lib/server/db/progress.js';
+import { attemptHistory, listActivities } from '#lib/server/db/progress.js';
 import {
 	attemptsAllowed,
 	describeCriteria,
@@ -20,22 +20,22 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
 	const { course, user } = await loadCourseFor(event, 'course:reports:view');
-	const [students, packages] = await Promise.all([
+	const [students, activities] = await Promise.all([
 		listStudents(course.id),
-		listPackages(course.id)
+		listActivities(course.id)
 	]);
-	const packageIds = packages.map((p) => p.id);
+	const activityIds = activities.map((p) => p.id);
 	const studentIds = students.map((s) => s.userId);
 	const [attempts, grants, caps] = await Promise.all([
-		attemptHistory(packageIds, studentIds),
-		attemptGrants(packageIds, studentIds),
+		attemptHistory(activityIds, studentIds),
+		attemptGrants(activityIds, studentIds),
 		capabilitiesFor(user, ['course:edit'], course.id)
 	]);
 
 	const rows = students.map((s) => {
 		const attemptsOf = (id: string) => attempts.get(`${id}:${s.userId}`) ?? [];
-		const states = evaluateActivities(packages, attemptsOf);
-		const cells = packages.map((p) => {
+		const states = evaluateActivities(activities, attemptsOf);
+		const cells = activities.map((p) => {
 			const tries = attemptsOf(p.id);
 			const shown = resultAttempt(tries, p);
 			const { complete, lockedBy } = states.get(p.id)!;
@@ -54,7 +54,7 @@ export const load: PageServerLoad = async (event) => {
 				result: shown ? resultOf(shown, p) : null
 			};
 		});
-		const mine = packages.flatMap((p) => attemptsOf(p.id));
+		const mine = activities.flatMap((p) => attemptsOf(p.id));
 		const lastAccess = mine
 			.map((a) => a.lastAccessedAt)
 			.filter((d): d is Date => d !== null)
@@ -65,7 +65,7 @@ export const load: PageServerLoad = async (event) => {
 			name: s.name,
 			email: s.email,
 			status: s.status,
-			progress: summarizeProgress(packages, attempts, s.userId),
+			progress: summarizeProgress(activities, attempts, s.userId),
 			cells,
 			totalTime: mine.reduce((sum, a) => sum + a.totalTime, 0),
 			lastAccess: lastAccess ?? null
@@ -75,7 +75,7 @@ export const load: PageServerLoad = async (event) => {
 	return {
 		course: { title: course.title, slug: course.slug },
 		canGrant: caps['course:edit'],
-		packages: packages.map((p) => ({
+		activities: activities.map((p) => ({
 			id: p.id,
 			title: p.title,
 			version: p.version,
@@ -85,7 +85,7 @@ export const load: PageServerLoad = async (event) => {
 	};
 };
 
-const grantSchema = z.object({ packageId: formFields.uuid(), userId: formFields.uuid() });
+const grantSchema = z.object({ activityId: formFields.uuid(), userId: formFields.uuid() });
 
 export const actions: Actions = {
 	grantAttempt: async (event) => {
@@ -93,21 +93,21 @@ export const actions: Actions = {
 		const parsed = parseForm(grantSchema, await event.request.formData());
 		if (!parsed.ok) return fail(400, { action: 'grantAttempt', ...formError('Invalid request.') });
 
-		const { packageId, userId } = parsed.data;
-		const [packages, students] = await Promise.all([
-			listPackages(course.id),
+		const { activityId, userId } = parsed.data;
+		const [activities, students] = await Promise.all([
+			listActivities(course.id),
 			listStudents(course.id)
 		]);
-		const activity = packages.find((p) => p.id === packageId);
+		const activity = activities.find((p) => p.id === activityId);
 		if (!activity || !students.some((s) => s.userId === userId)) {
 			return fail(404, { action: 'grantAttempt', ...formError('Learner or activity not found.') });
 		}
 
-		await grantAttempt(packageId, userId);
+		await grantAttempt(activityId, userId);
 		await notify(messages.attemptGranted(userId, course, activity.title)).catch(() => {});
 		return {
 			action: 'grantAttempt',
-			id: `${packageId}:${userId}`,
+			id: `${activityId}:${userId}`,
 			ok: true,
 			message: 'Granted one more attempt.'
 		};

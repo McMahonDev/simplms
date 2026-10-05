@@ -5,16 +5,15 @@ import { loadCourseFor } from '#lib/server/course-context.js';
 import { flattenTree, getCategoryTree } from '#lib/server/db/categories.js';
 import { deleteCourse, updateCourse } from '#lib/server/db/courses.js';
 import {
-	deletePackage,
-	movePackage,
-	renamePackage,
+	deleteActivity,
+	moveActivity,
+	renameActivity,
 	updateActivitySettings
-} from '#lib/server/db/packages.js';
-import { listPackages } from '#lib/server/db/progress.js';
+} from '#lib/server/db/activities.js';
+import { listActivities } from '#lib/server/db/progress.js';
 import { courseSchema } from '#lib/server/form-schemas.js';
 import { capabilitiesFor } from '#lib/server/permissions.js';
 import { ScormImportError } from '#lib/server/scorm/errors.js';
-import { storageKeyFor } from '#lib/server/scorm/import.js';
 import { ingestScormUpload, maxUploadBytes } from '#lib/server/scorm/upload.js';
 import { storage } from '#lib/server/storage/index.js';
 import { formError, formFields, parseForm } from '#lib/server/validation.js';
@@ -27,12 +26,12 @@ export const load: PageServerLoad = async (event) => {
 		['course:delete', 'course:enrollments:manage'],
 		course.id
 	);
-	const [tree, packages] = await Promise.all([getCategoryTree(), listPackages(course.id)]);
-	const titles = new Map(packages.map((p) => [p.id, p.title]));
+	const [tree, activities] = await Promise.all([getCategoryTree(), listActivities(course.id)]);
+	const titles = new Map(activities.map((p) => [p.id, p.title]));
 	return {
 		course,
 		caps,
-		packages: packages.map((p) => ({
+		activities: activities.map((p) => ({
 			...p,
 			criteria: describeCriteria(p),
 			requiresTitles: p.requires.map((id) => titles.get(id)).filter((t) => t !== undefined)
@@ -43,13 +42,13 @@ export const load: PageServerLoad = async (event) => {
 };
 
 const packageSchema = z.object({
-	packageId: formFields.uuid(),
+	activityId: formFields.uuid(),
 	direction: z.enum(['up', 'down']).optional(),
 	title: z.string().trim().min(1, 'Required').max(200).optional()
 });
 
 const activitySettingsSchema = z.object({
-	packageId: formFields.uuid(),
+	activityId: formFields.uuid(),
 	completionRule: z.enum(['viewed', 'completed', 'passed']),
 	completionMinScore: z
 		.string()
@@ -79,8 +78,8 @@ export const actions: Actions = {
 
 	delete: async (event) => {
 		const { course } = await loadCourseFor(event, 'course:delete');
-		const packageIds = await deleteCourse(course.id);
-		await Promise.all(packageIds.map((id) => storage.deletePrefix(storageKeyFor(id))));
+		const storageKeys = await deleteCourse(course.id);
+		await Promise.all(storageKeys.map((key) => storage.deletePrefix(key)));
 		redirect(303, '/admin/courses');
 	},
 
@@ -94,11 +93,11 @@ export const actions: Actions = {
 		}
 
 		try {
-			const pkg = await ingestScormUpload(course.id, file, title.data || undefined);
+			const added = await ingestScormUpload(course.id, file, title.data || undefined);
 			return {
 				action: 'upload',
 				ok: true,
-				message: `Added “${pkg.title}” (SCORM ${pkg.version}).`
+				message: `Added “${added.title}” (SCORM ${added.scorm.version}).`
 			};
 		} catch (err) {
 			if (err instanceof ScormImportError) {
@@ -108,39 +107,39 @@ export const actions: Actions = {
 		}
 	},
 
-	movePackage: async (event) => {
+	moveActivity: async (event) => {
 		const { course } = await loadCourseFor(event, 'course:edit');
 		const parsed = parseForm(packageSchema, await event.request.formData());
 		if (!parsed.ok || !parsed.data.direction) {
-			return fail(400, { action: 'movePackage', ...formError('Invalid request.') });
+			return fail(400, { action: 'moveActivity', ...formError('Invalid request.') });
 		}
-		await movePackage(course.id, parsed.data.packageId, parsed.data.direction);
-		return { action: 'movePackage', ok: true };
+		await moveActivity(course.id, parsed.data.activityId, parsed.data.direction);
+		return { action: 'moveActivity', ok: true };
 	},
 
-	renamePackage: async (event) => {
+	renameActivity: async (event) => {
 		const { course } = await loadCourseFor(event, 'course:edit');
 		const parsed = parseForm(packageSchema, await event.request.formData());
 		if (!parsed.ok || !parsed.data.title) {
-			return fail(400, { action: 'renamePackage', ...formError('Enter a title.') });
+			return fail(400, { action: 'renameActivity', ...formError('Enter a title.') });
 		}
-		const found = await renamePackage(course.id, parsed.data.packageId, parsed.data.title);
-		if (!found) return fail(404, { action: 'renamePackage', ...formError('Activity not found.') });
-		return { action: 'renamePackage', id: parsed.data.packageId, ok: true, message: 'Renamed.' };
+		const found = await renameActivity(course.id, parsed.data.activityId, parsed.data.title);
+		if (!found) return fail(404, { action: 'renameActivity', ...formError('Activity not found.') });
+		return { action: 'renameActivity', id: parsed.data.activityId, ok: true, message: 'Renamed.' };
 	},
 
 	activitySettings: async (event) => {
 		const { course } = await loadCourseFor(event, 'course:edit');
 		const formData = await event.request.formData();
 		const parsed = activitySettingsSchema.safeParse({
-			packageId: formData.get('packageId'),
+			activityId: formData.get('activityId'),
 			completionRule: formData.get('completionRule'),
 			completionMinScore: formData.get('completionMinScore') ?? '',
 			maxAttempts: formData.get('maxAttempts') ?? '',
 			requires: formData.getAll('requires')
 		});
 		if (!parsed.success) {
-			const id = String(formData.get('packageId') ?? '');
+			const id = String(formData.get('activityId') ?? '');
 			const field = parsed.error.issues[0]?.path[0];
 			return fail(400, {
 				action: 'activitySettings',
@@ -155,41 +154,41 @@ export const actions: Actions = {
 			});
 		}
 
-		const { packageId, completionRule, completionMinScore, maxAttempts, requires } = parsed.data;
-		const activities = await listPackages(course.id);
+		const { activityId, completionRule, completionMinScore, maxAttempts, requires } = parsed.data;
+		const activities = await listActivities(course.id);
 		const fail400 = (message: string) =>
-			fail(400, { action: 'activitySettings', id: packageId, ...formError(message) });
+			fail(400, { action: 'activitySettings', id: activityId, ...formError(message) });
 		const inCourse = new Set(activities.map((a) => a.id));
-		if (!inCourse.has(packageId)) {
+		if (!inCourse.has(activityId)) {
 			return fail(404, { action: 'activitySettings', ...formError('Activity not found.') });
 		}
 		if (requires.some((id) => !inCourse.has(id)))
 			return fail400('Pick prerequisites from this course.');
-		if (findCycle(activities, packageId, requires)) {
+		if (findCycle(activities, activityId, requires)) {
 			return fail400(
 				'Those prerequisites would create a loop, so the activities could never unlock.'
 			);
 		}
 
-		await updateActivitySettings(course.id, packageId, {
+		await updateActivitySettings(course.id, activityId, {
 			completionRule,
 			// The passing score only applies to the "passes it" rule.
 			completionMinScore: completionRule === 'passed' ? completionMinScore : null,
 			maxAttempts,
 			requires: [...new Set(requires)]
 		});
-		return { action: 'activitySettings', id: packageId, ok: true, message: 'Settings saved.' };
+		return { action: 'activitySettings', id: activityId, ok: true, message: 'Settings saved.' };
 	},
 
-	deletePackage: async (event) => {
+	deleteActivity: async (event) => {
 		const { course } = await loadCourseFor(event, 'course:edit');
 		const parsed = parseForm(packageSchema, await event.request.formData());
-		if (!parsed.ok) return fail(400, { action: 'deletePackage', ...parsed });
-		const storageKey = await deletePackage(course.id, parsed.data.packageId);
-		if (!storageKey) {
-			return fail(404, { action: 'deletePackage', ...formError('Activity not found.') });
+		if (!parsed.ok) return fail(400, { action: 'deleteActivity', ...parsed });
+		const deleted = await deleteActivity(course.id, parsed.data.activityId);
+		if (!deleted) {
+			return fail(404, { action: 'deleteActivity', ...formError('Activity not found.') });
 		}
-		await storage.deletePrefix(storageKey);
-		return { action: 'deletePackage', ok: true, message: 'Activity deleted.' };
+		if (deleted.storageKey) await storage.deletePrefix(deleted.storageKey);
+		return { action: 'deleteActivity', ok: true, message: 'Activity deleted.' };
 	}
 };

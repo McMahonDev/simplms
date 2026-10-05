@@ -184,9 +184,13 @@ test('activities stay locked until prerequisites are complete; teachers set comp
 	await signIn(page, 'teacher2@simplms.test');
 	await page.goto('/courses/golf-fundamentals');
 	await page.getByRole('link', { name: 'Preview Golf Explained (SCORM 2004)' }).click();
-	await expect(page).toHaveURL(/\/scorm\//);
+	await expect(page).toHaveURL(/\/activities\//);
 	await expect(page.getByRole('heading', { name: 'Golf Explained (SCORM 2004)' })).toBeVisible();
 	const lockedUrl = new URL(page.url()).pathname;
+
+	// Activities used to live under /scorm/; old links redirect.
+	await page.goto(lockedUrl.replace('/activities/', '/scorm/'));
+	await expect(page).toHaveURL(lockedUrl);
 	const contentUrl = await page.locator('iframe.sco').getAttribute('src');
 
 	// Require a score of 90+ on the 1.2 activity.
@@ -267,14 +271,14 @@ test('finished attempts open for review; retakes are limited by the attempt sett
 	await expect(activity.getByRole('button', { name: /Start new attempt/ })).toHaveCount(0);
 
 	// The server refuses a third attempt even if the form is posted directly.
-	const packageId = new URL(
+	const activityId = new URL(
 		(await activity.getByRole('link', { name: /^Review/ }).getAttribute('href'))!,
 		page.url()
 	).pathname
 		.split('/')
 		.at(-1)!;
 	const response = await page.request.post('/courses/golf-fundamentals?/retake', {
-		form: { packageId },
+		form: { activityId },
 		headers: { origin: new URL(page.url()).origin, 'x-sveltekit-action': 'true' }
 	});
 	expect(await response.text()).toContain('used all your attempts');

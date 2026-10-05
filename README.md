@@ -129,7 +129,8 @@ src/
   routes/
     (auth)/sign-in, sign-up   public pages
     (app)/                    signed-in shell: dashboard, courses, admin
-    scorm/content/[id]/[...]  serves package files after an access check
+    (app)/courses/[slug]/activities/[id]   opens an activity (the SCORM player today)
+    scorm/content/[id]/[...]  serves SCORM package files after an access check
     api/scorm/attempts/[id]/commit   SCORM tracking endpoint
 ```
 

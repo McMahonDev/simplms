@@ -1,28 +1,28 @@
 import { and, desc, eq, inArray, max, sql } from 'drizzle-orm';
 import type { NormalizedCommit } from '../scorm/cmi.js';
 import { db } from './index.js';
-import { attemptGrant, scormAttempt, scormPackage } from './schema.js';
+import { activity, activityAttempt, attemptGrant, scormPackage } from './schema.js';
 
 /**
- * Returns the user's latest attempt for a package, creating attempt #1 if none exists.
+ * Returns the user's latest attempt at an activity, creating attempt #1 if none exists.
  * Learners always reopen their latest attempt; a finished one opens in review mode.
  */
-export async function getOrCreateCurrentAttempt(packageId: string, userId: string) {
+export async function getOrCreateCurrentAttempt(activityId: string, userId: string) {
 	const latest = () =>
 		db
 			.select()
-			.from(scormAttempt)
-			.where(and(eq(scormAttempt.packageId, packageId), eq(scormAttempt.userId, userId)))
-			.orderBy(desc(scormAttempt.attemptNumber))
+			.from(activityAttempt)
+			.where(and(eq(activityAttempt.activityId, activityId), eq(activityAttempt.userId, userId)))
+			.orderBy(desc(activityAttempt.attemptNumber))
 			.limit(1);
 
 	const [existing] = await latest();
 	if (existing) return existing;
 
-	// Two tabs can race here; the unique (package, user, attempt_number) index settles it.
+	// Two tabs can race here; the unique (activity, user, attempt_number) index settles it.
 	await db
-		.insert(scormAttempt)
-		.values({ packageId, userId, attemptNumber: 1 })
+		.insert(activityAttempt)
+		.values({ activityId, userId, attemptNumber: 1 })
 		.onConflictDoNothing();
 	const [created] = await latest();
 	return created;
@@ -31,70 +31,73 @@ export async function getOrCreateCurrentAttempt(packageId: string, userId: strin
 /**
  * Starts the next attempt for a user (latest + 1). The caller checks the attempt limit and that
  * the latest attempt is finished. A double submit can't create two: the unique
- * (package, user, attempt_number) index makes the second insert a no-op.
+ * (activity, user, attempt_number) index makes the second insert a no-op.
  */
-export async function startNewAttempt(packageId: string, userId: string) {
+export async function startNewAttempt(activityId: string, userId: string) {
 	const [{ latest }] = await db
-		.select({ latest: max(scormAttempt.attemptNumber) })
-		.from(scormAttempt)
-		.where(and(eq(scormAttempt.packageId, packageId), eq(scormAttempt.userId, userId)));
+		.select({ latest: max(activityAttempt.attemptNumber) })
+		.from(activityAttempt)
+		.where(and(eq(activityAttempt.activityId, activityId), eq(activityAttempt.userId, userId)));
 	await db
-		.insert(scormAttempt)
-		.values({ packageId, userId, attemptNumber: (latest ?? 0) + 1 })
+		.insert(activityAttempt)
+		.values({ activityId, userId, attemptNumber: (latest ?? 0) + 1 })
 		.onConflictDoNothing();
 }
 
 /** Gives one learner one more attempt on an activity, beyond its limit. */
-export async function grantAttempt(packageId: string, userId: string) {
+export async function grantAttempt(activityId: string, userId: string) {
 	await db
 		.insert(attemptGrant)
-		.values({ packageId, userId, extraAttempts: 1 })
+		.values({ activityId, userId, extraAttempts: 1 })
 		.onConflictDoUpdate({
-			target: [attemptGrant.packageId, attemptGrant.userId],
+			target: [attemptGrant.activityId, attemptGrant.userId],
 			set: { extraAttempts: sql`${attemptGrant.extraAttempts} + 1` }
 		});
 }
 
-/** Extra attempts granted, keyed "packageId:userId" (missing means none). */
-export async function attemptGrants(packageIds: string[], userIds: string[]) {
+/** Extra attempts granted, keyed "activityId:userId" (missing means none). */
+export async function attemptGrants(activityIds: string[], userIds: string[]) {
 	const grants = new Map<string, number>();
-	if (packageIds.length === 0 || userIds.length === 0) return grants;
+	if (activityIds.length === 0 || userIds.length === 0) return grants;
 	const rows = await db
 		.select()
 		.from(attemptGrant)
-		.where(and(inArray(attemptGrant.packageId, packageIds), inArray(attemptGrant.userId, userIds)));
-	for (const r of rows) grants.set(`${r.packageId}:${r.userId}`, r.extraAttempts);
+		.where(
+			and(inArray(attemptGrant.activityId, activityIds), inArray(attemptGrant.userId, userIds))
+		);
+	for (const r of rows) grants.set(`${r.activityId}:${r.userId}`, r.extraAttempts);
 	return grants;
 }
 
 /**
- * True when the user has opened the package at least once. The launch page creates the attempt
- * after checking locks, so the content route uses this to keep locked packages closed.
+ * True when the user has opened the activity at least once. The launch page creates the attempt
+ * after checking locks, so the SCORM content route uses this to keep locked packages closed.
  */
-export async function hasAttempt(packageId: string, userId: string) {
+export async function hasAttempt(activityId: string, userId: string) {
 	const [row] = await db
-		.select({ id: scormAttempt.id })
-		.from(scormAttempt)
-		.where(and(eq(scormAttempt.packageId, packageId), eq(scormAttempt.userId, userId)))
+		.select({ id: activityAttempt.id })
+		.from(activityAttempt)
+		.where(and(eq(activityAttempt.activityId, activityId), eq(activityAttempt.userId, userId)))
 		.limit(1);
 	return Boolean(row);
 }
 
-/** The attempt plus the package facts the commit endpoint needs. */
+/** The attempt plus the activity and SCORM facts the commit endpoint needs. */
 export async function getAttemptForCommit(attemptId: string) {
 	const [row] = await db
 		.select({
-			id: scormAttempt.id,
-			userId: scormAttempt.userId,
-			completionStatus: scormAttempt.completionStatus,
-			successStatus: scormAttempt.successStatus,
-			sessionId: scormAttempt.sessionId,
-			courseId: scormPackage.courseId,
+			id: activityAttempt.id,
+			userId: activityAttempt.userId,
+			completionStatus: activityAttempt.completionStatus,
+			successStatus: activityAttempt.successStatus,
+			sessionId: activityAttempt.sessionId,
+			courseId: activity.courseId,
 			version: scormPackage.version
 		})
-		.from(scormAttempt)
-		.innerJoin(scormPackage, eq(scormPackage.id, scormAttempt.packageId))
-		.where(eq(scormAttempt.id, attemptId))
+		.from(activityAttempt)
+		.innerJoin(activity, eq(activity.id, activityAttempt.activityId))
+		.innerJoin(scormPackage, eq(scormPackage.activityId, activityAttempt.activityId))
+		.where(eq(activityAttempt.id, attemptId))
 		.limit(1);
 	return row ?? null;
 }
@@ -115,12 +118,12 @@ export async function saveCommit(
 	await db.transaction(async (tx) => {
 		const [current] = await tx
 			.select({
-				totalTime: scormAttempt.totalTime,
-				sessionId: scormAttempt.sessionId,
-				sessionTime: scormAttempt.sessionTime
+				totalTime: activityAttempt.totalTime,
+				sessionId: activityAttempt.sessionId,
+				sessionTime: activityAttempt.sessionTime
 			})
-			.from(scormAttempt)
-			.where(eq(scormAttempt.id, attemptId))
+			.from(activityAttempt)
+			.where(eq(activityAttempt.id, attemptId))
 			.for('update');
 		if (!current) return;
 
@@ -129,9 +132,9 @@ export async function saveCommit(
 		const sessionTime = normalized.sessionSeconds ?? (sameSession ? current.sessionTime : 0);
 
 		await tx
-			.update(scormAttempt)
+			.update(activityAttempt)
 			.set({
-				cmiJson: cmi,
+				data: cmi,
 				completionStatus: normalized.completionStatus,
 				successStatus: normalized.successStatus,
 				scoreRaw: normalized.scoreRaw,
@@ -141,14 +144,14 @@ export async function saveCommit(
 				sessionTime,
 				lastAccessedAt: new Date()
 			})
-			.where(eq(scormAttempt.id, attemptId));
+			.where(eq(activityAttempt.id, attemptId));
 	});
 }
 
 /** Marks the attempt as accessed when the player opens, so reports show recent activity. */
 export async function touchAttempt(attemptId: string) {
 	await db
-		.update(scormAttempt)
+		.update(activityAttempt)
 		.set({ lastAccessedAt: new Date() })
-		.where(eq(scormAttempt.id, attemptId));
+		.where(eq(activityAttempt.id, attemptId));
 }

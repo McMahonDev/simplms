@@ -104,16 +104,22 @@
 							{#if data.caps['scorm:launch'] && (!locked || data.caps['course:edit'])}
 								<div class="cluster launch">
 									{#if locked}
-										<a class="button secondary" href="/courses/{data.course.slug}/scorm/{a.id}">
+										<a
+											class="button secondary"
+											href="/courses/{data.course.slug}/activities/{a.id}"
+										>
 											Preview <span class="visually-hidden">{a.title}</span>
 										</a>
 									{:else if a.finished}
-										<a class="button secondary" href="/courses/{data.course.slug}/scorm/{a.id}">
+										<a
+											class="button secondary"
+											href="/courses/{data.course.slug}/activities/{a.id}"
+										>
 											Review <span class="visually-hidden">{a.title}</span>
 										</a>
 										{#if a.canRetake}
 											<form method="POST" action="?/retake">
-												<input type="hidden" name="packageId" value={a.id} />
+												<input type="hidden" name="activityId" value={a.id} />
 												<button type="submit">
 													Start new attempt <span class="visually-hidden">{a.title}</span>
 												</button>
@@ -122,7 +128,7 @@
 											<span class="muted meta">No attempts left</span>
 										{/if}
 									{:else}
-										<a class="button" href="/courses/{data.course.slug}/scorm/{a.id}">
+										<a class="button" href="/courses/{data.course.slug}/activities/{a.id}">
 											{a.latest && a.latest.completionStatus !== 'not attempted'
 												? 'Continue'
 												: 'Start'}
