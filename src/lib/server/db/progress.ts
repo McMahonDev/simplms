@@ -16,15 +16,16 @@ import { db } from './index.js';
 import {
 	type CompletionStatus,
 	type SuccessStatus,
+	activity,
+	activityAttempt,
 	activityPrerequisite,
 	course,
 	enrollment,
-	scormAttempt,
 	scormPackage
 } from './schema.js';
 
 export type AttemptSummary = {
-	packageId: string;
+	activityId: string;
 	userId: string;
 	attemptNumber: number;
 	completionStatus: CompletionStatus;
@@ -35,54 +36,59 @@ export type AttemptSummary = {
 };
 
 const attemptColumns = {
-	packageId: scormAttempt.packageId,
-	userId: scormAttempt.userId,
-	attemptNumber: scormAttempt.attemptNumber,
-	completionStatus: scormAttempt.completionStatus,
-	successStatus: scormAttempt.successStatus,
-	scoreRaw: scormAttempt.scoreRaw,
-	totalTime: scormAttempt.totalTime,
-	lastAccessedAt: scormAttempt.lastAccessedAt
+	activityId: activityAttempt.activityId,
+	userId: activityAttempt.userId,
+	attemptNumber: activityAttempt.attemptNumber,
+	completionStatus: activityAttempt.completionStatus,
+	successStatus: activityAttempt.successStatus,
+	scoreRaw: activityAttempt.scoreRaw,
+	totalTime: activityAttempt.totalTime,
+	lastAccessedAt: activityAttempt.lastAccessedAt
 };
 
-/** Attempts for each (package, user), keyed "packageId:userId", in attempt order. */
+/** Attempts for each (activity, user), keyed "activityId:userId", in attempt order. */
 export type AttemptHistory = Map<string, AttemptSummary[]>;
 
 /** A course's activities in order, with their completion rules and prerequisites. */
-export async function listPackages(courseId: string) {
-	return packagesForCourses([courseId]);
+export async function listActivities(courseId: string) {
+	return activitiesForCourses([courseId]);
 }
 
-/** Every attempt by the given users on the given packages, keyed "packageId:userId". */
+/** Every attempt by the given users at the given activities, keyed "activityId:userId". */
 export async function attemptHistory(
-	packageIds: string[],
+	activityIds: string[],
 	userIds: string[]
 ): Promise<AttemptHistory> {
 	const history: AttemptHistory = new Map();
-	if (packageIds.length === 0 || userIds.length === 0) return history;
+	if (activityIds.length === 0 || userIds.length === 0) return history;
 	const rows = await db
 		.select(attemptColumns)
-		.from(scormAttempt)
-		.where(and(inArray(scormAttempt.packageId, packageIds), inArray(scormAttempt.userId, userIds)))
-		.orderBy(asc(scormAttempt.attemptNumber));
+		.from(activityAttempt)
+		.where(
+			and(
+				inArray(activityAttempt.activityId, activityIds),
+				inArray(activityAttempt.userId, userIds)
+			)
+		)
+		.orderBy(asc(activityAttempt.attemptNumber));
 	for (const row of rows) {
-		const key = `${row.packageId}:${row.userId}`;
+		const key = `${row.activityId}:${row.userId}`;
 		history.set(key, [...(history.get(key) ?? []), row]);
 	}
 	return history;
 }
 
-/** The course's packages, each with this user's latest attempt (if any). */
-export async function packagesWithProgress(courseId: string, userId: string) {
-	const packages = await listPackages(courseId);
-	const ids = packages.map((p) => p.id);
+/** The course's activities, each with this user's attempts, completion, and lock state. */
+export async function activitiesWithProgress(courseId: string, userId: string) {
+	const activities = await listActivities(courseId);
+	const ids = activities.map((a) => a.id);
 	const [history, grants] = await Promise.all([
 		attemptHistory(ids, [userId]),
 		attemptGrants(ids, [userId])
 	]);
 	const attemptsOf = (id: string) => history.get(`${id}:${userId}`) ?? [];
-	const states = evaluateActivities(packages, attemptsOf);
-	return packages.map((p) => {
+	const states = evaluateActivities(activities, attemptsOf);
+	return activities.map((p) => {
 		const attempts = attemptsOf(p.id);
 		const shown = resultAttempt(attempts, p);
 		const allowed = attemptsAllowed(p.maxAttempts, grants.get(`${p.id}:${userId}`));
@@ -122,23 +128,26 @@ export async function myEnrollments(userId: string) {
 }
 
 /** Activities for several courses at once, in course order, with rules and prerequisites. */
-export async function packagesForCourses(courseIds: string[]) {
+export async function activitiesForCourses(courseIds: string[]) {
 	if (courseIds.length === 0) return [];
 	const rows = await db
 		.select({
-			id: scormPackage.id,
-			courseId: scormPackage.courseId,
-			title: scormPackage.title,
+			id: activity.id,
+			courseId: activity.courseId,
+			type: activity.type,
+			title: activity.title,
+			/** Only SCORM activities have a version. */
 			version: scormPackage.version,
-			sortOrder: scormPackage.sortOrder,
-			createdAt: scormPackage.createdAt,
-			completionRule: scormPackage.completionRule,
-			completionMinScore: scormPackage.completionMinScore,
-			maxAttempts: scormPackage.maxAttempts
+			sortOrder: activity.sortOrder,
+			createdAt: activity.createdAt,
+			completionRule: activity.completionRule,
+			completionMinScore: activity.completionMinScore,
+			maxAttempts: activity.maxAttempts
 		})
-		.from(scormPackage)
-		.where(inArray(scormPackage.courseId, courseIds))
-		.orderBy(asc(scormPackage.sortOrder), asc(scormPackage.createdAt));
+		.from(activity)
+		.leftJoin(scormPackage, eq(scormPackage.activityId, activity.id))
+		.where(inArray(activity.courseId, courseIds))
+		.orderBy(asc(activity.sortOrder), asc(activity.createdAt));
 	if (rows.length === 0) return [];
 
 	const prerequisites = await db
@@ -146,12 +155,12 @@ export async function packagesForCourses(courseIds: string[]) {
 		.from(activityPrerequisite)
 		.where(
 			inArray(
-				activityPrerequisite.packageId,
+				activityPrerequisite.activityId,
 				rows.map((r) => r.id)
 			)
 		);
 	return rows.map((r) => ({
 		...r,
-		requires: prerequisites.filter((p) => p.packageId === r.id).map((p) => p.requiredPackageId)
+		requires: prerequisites.filter((p) => p.activityId === r.id).map((p) => p.requiredActivityId)
 	}));
 }

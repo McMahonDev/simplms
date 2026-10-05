@@ -27,13 +27,20 @@ Choices made where the spec was ambiguous or the tooling forced a deviation. New
 
 - **Better Auth ids are UUIDs** (`advanced.database.generateId: 'uuid'`) so app tables can use
   `uuid` foreign keys to `user.id`.
-- **`scorm_attempt.total_time` is seconds (double precision).** SCORM 1.2 and 2004 use different
+- **Activities are typed.** `activity` holds everything an item in a course shares (title,
+  order, completion rule, passing score, attempt limit) plus a `type` (`scorm`, and soon page,
+  link, PDF, video, quiz). Type-specific data lives beside it: `scorm_package` for SCORM, a
+  validated `settings` JSON column for simple types. `activity_attempt` is shared by every type;
+  its `data` column holds type-specific state (SCORM's CMI). This replaced `scorm_package` and
+  `scorm_attempt` in migration `0008`, written by hand as renames so ids and data carry over;
+  drizzle-kit would have dropped and recreated the tables.
+- **`activity_attempt.total_time` is seconds (double precision).** SCORM 1.2 and 2004 use different
   time formats; storing seconds makes accumulation and reporting version-neutral.
 - **Status columns are text with TypeScript unions**, enrollment role/status and SCORM version are
   Postgres enums. Statuses are normalized values copied from CMI and may need new values later,
   which is easier with text.
 - **Foreign key delete behavior:** deleting a user cascades to their enrollments and attempts and
-  sets `course.created_by` to null. Deleting a course cascades to enrollments, packages, and
+  sets `course.created_by` to null. Deleting a course cascades to enrollments, activities, and
   attempts. Categories `restrict`: the app blocks deleting a category with courses or children.
 
 ## Courses and enrollments
@@ -48,7 +55,14 @@ Choices made where the spec was ambiguous or the tooling forced a deviation. New
   can't be joined.
 - **Enrollment codes are stored in plain text** so teachers can see and share them, like Moodle.
   They're excluded from the course query every page uses and only read by the Enrollments page
-  and the join check, which compares in constant time. Wrong guesses aren't rate limited yet.
+  and the join check, which compares in constant time.
+- **Code guesses are rate limited**: 5 per learner per course and 30 per IP address (across
+  courses, so extra accounts don't help), within 15 minutes. Each try is counted before the code
+  is checked, inside a transaction holding a Postgres advisory lock per limit key, so a burst of
+  parallel requests is counted one at a time (an e2e test fires 20 at once; exactly 5 are
+  checked). Refused tries aren't counted, and a correct code clears the learner's count. The
+  table (`rate_limit_hit`) and `consumeRateLimit` are generic for future limits; a job prunes
+  rows older than a day.
 - **Teachers edit all course details**, including category and visibility, because the permission
   table grants them "Edit course details". Only admins and managers can delete a course.
 - **Suspended enrollments grant nothing**, for teachers and students alike.

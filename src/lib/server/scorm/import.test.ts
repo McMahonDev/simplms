@@ -47,7 +47,7 @@ describe('importScormZip', () => {
 	it('extracts the Golf SCORM 1.2 package', async () => {
 		const result = await importScormZip({
 			zipPath: fileURLToPath(golf12),
-			packageId: 'pkg12',
+			activityId: 'pkg12',
 			storage,
 			limits
 		});
@@ -61,7 +61,7 @@ describe('importScormZip', () => {
 	it('extracts the Golf SCORM 2004 package', async () => {
 		const result = await importScormZip({
 			zipPath: fileURLToPath(golf2004),
-			packageId: 'pkg2004',
+			activityId: 'pkg2004',
 			storage,
 			limits
 		});
@@ -75,7 +75,7 @@ describe('importScormZip', () => {
 			{ name: 'shared/launchpage.html', data: '<html></html>' },
 			{ name: '../../evil.txt', data: 'pwned' }
 		]);
-		await expect(importScormZip({ zipPath, packageId: 'p', storage, limits })).rejects.toThrow(
+		await expect(importScormZip({ zipPath, activityId: 'p', storage, limits })).rejects.toThrow(
 			ScormImportError
 		);
 		expect(existsSync(path.join(dir, 'evil.txt'))).toBe(false);
@@ -89,7 +89,7 @@ describe('importScormZip', () => {
 			{ name: 'shared/launchpage.html', data: '<html></html>' },
 			{ name: 'a/../../evil.txt', data: 'pwned' }
 		]);
-		await expect(importScormZip({ zipPath, packageId: 'p', storage, limits })).rejects.toThrow(
+		await expect(importScormZip({ zipPath, activityId: 'p', storage, limits })).rejects.toThrow(
 			/unsafe|escapes/
 		);
 	});
@@ -99,21 +99,21 @@ describe('importScormZip', () => {
 			{ name: 'imsmanifest.xml', data: manifest12 },
 			{ name: 'shared/launchpage.html', data: '/etc/passwd', symlink: true }
 		]);
-		await expect(importScormZip({ zipPath, packageId: 'p', storage, limits })).rejects.toThrow(
+		await expect(importScormZip({ zipPath, activityId: 'p', storage, limits })).rejects.toThrow(
 			/symbolic link/
 		);
 	});
 
 	it('requires imsmanifest.xml at the package root', async () => {
 		const zipPath = await zipFile([{ name: 'course/imsmanifest.xml', data: manifest12 }]);
-		await expect(importScormZip({ zipPath, packageId: 'p', storage, limits })).rejects.toThrow(
+		await expect(importScormZip({ zipPath, activityId: 'p', storage, limits })).rejects.toThrow(
 			/imsmanifest.xml was not found at the root/
 		);
 	});
 
 	it('requires the launch file to exist', async () => {
 		const zipPath = await zipFile([{ name: 'imsmanifest.xml', data: manifest12 }]);
-		await expect(importScormZip({ zipPath, packageId: 'p', storage, limits })).rejects.toThrow(
+		await expect(importScormZip({ zipPath, activityId: 'p', storage, limits })).rejects.toThrow(
 			/launch file "shared\/launchpage.html"/
 		);
 		expect(await storage.head('scorm/p/imsmanifest.xml')).toBeNull();
@@ -126,7 +126,7 @@ describe('importScormZip', () => {
 			{ name: 'b.txt', data: 'x' }
 		]);
 		await expect(
-			importScormZip({ zipPath, packageId: 'p', storage, limits: { ...limits, maxFiles: 2 } })
+			importScormZip({ zipPath, activityId: 'p', storage, limits: { ...limits, maxFiles: 2 } })
 		).rejects.toThrow(/more than 2 files/);
 	});
 
@@ -138,7 +138,7 @@ describe('importScormZip', () => {
 		await expect(
 			importScormZip({
 				zipPath,
-				packageId: 'p',
+				activityId: 'p',
 				storage,
 				limits: { ...limits, maxTotalBytes: 2048 }
 			})
@@ -148,7 +148,7 @@ describe('importScormZip', () => {
 	it('rejects files that are not zips', async () => {
 		const zipPath = path.join(dir, 'not.zip');
 		await writeFile(zipPath, 'hello');
-		await expect(importScormZip({ zipPath, packageId: 'p', storage, limits })).rejects.toThrow(
+		await expect(importScormZip({ zipPath, activityId: 'p', storage, limits })).rejects.toThrow(
 			/not a valid zip/
 		);
 	});

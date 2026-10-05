@@ -184,9 +184,13 @@ test('activities stay locked until prerequisites are complete; teachers set comp
 	await signIn(page, 'teacher2@simplms.test');
 	await page.goto('/courses/golf-fundamentals');
 	await page.getByRole('link', { name: 'Preview Golf Explained (SCORM 2004)' }).click();
-	await expect(page).toHaveURL(/\/scorm\//);
+	await expect(page).toHaveURL(/\/activities\//);
 	await expect(page.getByRole('heading', { name: 'Golf Explained (SCORM 2004)' })).toBeVisible();
 	const lockedUrl = new URL(page.url()).pathname;
+
+	// Activities used to live under /scorm/; old links redirect.
+	await page.goto(lockedUrl.replace('/activities/', '/scorm/'));
+	await expect(page).toHaveURL(lockedUrl);
 	const contentUrl = await page.locator('iframe.sco').getAttribute('src');
 
 	// Require a score of 90+ on the 1.2 activity.
@@ -267,14 +271,14 @@ test('finished attempts open for review; retakes are limited by the attempt sett
 	await expect(activity.getByRole('button', { name: /Start new attempt/ })).toHaveCount(0);
 
 	// The server refuses a third attempt even if the form is posted directly.
-	const packageId = new URL(
+	const activityId = new URL(
 		(await activity.getByRole('link', { name: /^Review/ }).getAttribute('href'))!,
 		page.url()
 	).pathname
 		.split('/')
 		.at(-1)!;
 	const response = await page.request.post('/courses/golf-fundamentals?/retake', {
-		form: { packageId },
+		form: { activityId },
 		headers: { origin: new URL(page.url()).origin, 'x-sveltekit-action': 'true' }
 	});
 	expect(await response.text()).toContain('used all your attempts');
@@ -346,4 +350,41 @@ test('people choose which notifications are emailed; the delivery job sends the 
 	const job = page.getByRole('row').filter({ hasText: 'deliver-email' });
 	await job.getByRole('button', { name: /Run now/ }).click();
 	await expect(job.getByText(/^Done: \d+ sent, \d+ skipped, 0 failed \(via log\)$/)).toBeVisible();
+});
+
+test('enrollment code guesses are rate limited', async ({ page }) => {
+	// student2 isn't in Workplace Safety, which needs the code SAFETY-2026.
+	await signIn(page, 'student2@simplms.test');
+	await page.goto('/courses/workplace-safety');
+	const code = page.getByLabel('Enrollment code');
+	const join = page.getByRole('button', { name: 'Join course' });
+	for (let i = 0; i < 5; i++) {
+		await code.fill(`wrong-${i}`);
+		await join.click();
+		await expect(page.getByRole('alert')).toContainText('That code is not right');
+	}
+
+	// The sixth try is refused before the code is even checked, so the right code fails too.
+	await code.fill('SAFETY-2026');
+	await join.click();
+	await expect(page.getByRole('alert')).toContainText('Too many tries. Try again in 15 minutes');
+	await expect(page.getByRole('heading', { name: 'Join this course' })).toBeVisible();
+});
+
+test('parallel enrollment code guesses cannot get past the limit', async ({ page }) => {
+	await signIn(page, 'student5@simplms.test');
+	const origin = new URL(page.url()).origin;
+	const guesses = await Promise.all(
+		Array.from({ length: 20 }, (_, i) =>
+			page.request
+				.post('/courses/workplace-safety?/join', {
+					form: { key: `burst-${i}` },
+					headers: { origin, 'x-sveltekit-action': 'true' }
+				})
+				.then((r) => r.text())
+		)
+	);
+	// Exactly five guesses were checked; the other fifteen were refused before checking.
+	expect(guesses.filter((t) => t.includes('That code is not right'))).toHaveLength(5);
+	expect(guesses.filter((t) => t.includes('Too many tries'))).toHaveLength(15);
 });

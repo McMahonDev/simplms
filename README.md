@@ -107,7 +107,8 @@ All configuration comes from environment variables, validated with Zod at startu
 | `RESEND_API_KEY`            | unset                                               | Required when `MAIL_TRANSPORT=resend`                                                               |
 | `BODY_SIZE_LIMIT`           | adapter-node default (512K)                         | Production only. Set it above the upload limit, e.g. `600M`                                         |
 
-Behind a reverse proxy, also set adapter-node's `PROTOCOL_HEADER` and `HOST_HEADER`.
+Behind a reverse proxy, also set adapter-node's `PROTOCOL_HEADER` and `HOST_HEADER`, and
+`ADDRESS_HEADER` (with `XFF_DEPTH`) so rate limits see the client's IP rather than the proxy's.
 
 ## Architecture
 
@@ -128,7 +129,8 @@ src/
   routes/
     (auth)/sign-in, sign-up   public pages
     (app)/                    signed-in shell: dashboard, courses, admin
-    scorm/content/[id]/[...]  serves package files after an access check
+    (app)/courses/[slug]/activities/[id]   opens an activity (the SCORM player today)
+    scorm/content/[id]/[...]  serves SCORM package files after an access check
     api/scorm/attempts/[id]/commit   SCORM tracking endpoint
 ```
 

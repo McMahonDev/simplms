@@ -1,7 +1,14 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { and, asc, eq, getTableColumns, ilike, or, sql } from 'drizzle-orm';
 import { db } from './index.js';
-import { type EnrollmentMethod, category, course, enrollment, scormPackage } from './schema.js';
+import {
+	type EnrollmentMethod,
+	activity,
+	category,
+	course,
+	enrollment,
+	scormPackage
+} from './schema.js';
 import { uniqueSlug } from './slugs.js';
 import { likeTerm } from './utils.js';
 
@@ -43,7 +50,7 @@ export async function listCoursesForAdmin(filters: CourseFilters = {}) {
 			visible: course.visible,
 			categoryName: category.name,
 			students: sql<number>`(select count(*)::int from ${enrollment} where ${enrollment.courseId} = ${course.id} and ${enrollment.role} = 'student' and ${enrollment.status} = 'active')`,
-			packages: sql<number>`(select count(*)::int from ${scormPackage} where ${scormPackage.courseId} = ${course.id})`
+			activities: sql<number>`(select count(*)::int from ${activity} where ${activity.courseId} = ${course.id})`
 		})
 		.from(course)
 		.innerJoin(category, eq(category.id, course.categoryId))
@@ -124,12 +131,16 @@ export async function setEnrollmentMethod(id: string, method: EnrollmentMethod, 
 		.where(eq(course.id, id));
 }
 
-/** Deletes the course; enrollments, packages, and attempts cascade. Returns package ids. */
+/**
+ * Deletes the course; enrollments, activities, and attempts cascade. Returns the storage
+ * prefixes of its SCORM packages so the caller can delete their files.
+ */
 export async function deleteCourse(id: string): Promise<string[]> {
 	const packages = await db
-		.select({ id: scormPackage.id })
+		.select({ storageKey: scormPackage.storageKey })
 		.from(scormPackage)
-		.where(eq(scormPackage.courseId, id));
+		.innerJoin(activity, eq(activity.id, scormPackage.activityId))
+		.where(eq(activity.courseId, id));
 	await db.delete(course).where(eq(course.id, id));
-	return packages.map((p) => p.id);
+	return packages.map((p) => p.storageKey);
 }

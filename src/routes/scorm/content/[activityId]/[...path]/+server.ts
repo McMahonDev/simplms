@@ -8,7 +8,7 @@
 import { error } from '@sveltejs/kit';
 import { z } from 'zod';
 import { hasAttempt } from '#lib/server/db/attempts.js';
-import { getPackage } from '#lib/server/db/packages.js';
+import { getScormActivity } from '#lib/server/db/activities.js';
 import { requireUser } from '#lib/server/guards.js';
 import { parseRange } from '#lib/server/http-range.js';
 import { can } from '#lib/server/permissions.js';
@@ -16,22 +16,22 @@ import { contentTypeFor } from '#lib/server/scorm/mime.js';
 import { storage } from '#lib/server/storage/index.js';
 import type { RequestHandler } from './$types';
 
-const packageIdSchema = z.uuid();
+const activityIdSchema = z.uuid();
 
 export const GET: RequestHandler = async (event) => {
 	const user = requireUser(event);
 
-	const packageId = packageIdSchema.safeParse(event.params.packageId);
-	if (!packageId.success) error(404, 'Not found');
-	const pkg = await getPackage(packageId.data);
-	if (!pkg) error(404, 'Not found');
+	const activityId = activityIdSchema.safeParse(event.params.activityId);
+	if (!activityId.success) error(404, 'Not found');
+	const activity = await getScormActivity(activityId.data);
+	if (!activity) error(404, 'Not found');
 
 	// Check course access before touching storage.
-	if (!(await can(user, 'scorm:launch', pkg.courseId))) {
+	if (!(await can(user, 'scorm:launch', activity.courseId))) {
 		error(403, 'You do not have access to this course.');
 	}
 	// Files are only served once the launch page (which enforces locks) has opened the package.
-	if (!(await hasAttempt(pkg.id, user.id))) {
+	if (!(await hasAttempt(activity.id, user.id))) {
 		error(403, 'Open this activity from its course page first.');
 	}
 
@@ -46,7 +46,7 @@ export const GET: RequestHandler = async (event) => {
 		error(404, 'Not found');
 	}
 
-	const key = `${pkg.storageKey}/${relative}`;
+	const key = `${activity.scorm.storageKey}/${relative}`;
 	const info = await storage.head(key);
 	if (!info) error(404, 'Not found');
 

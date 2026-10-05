@@ -139,7 +139,7 @@
 				>
 				{#if data.attempt.canRetake}
 					<form method="POST" action="/courses/{data.course.slug}?/retake">
-						<input type="hidden" name="packageId" value={data.activity.id} />
+						<input type="hidden" name="activityId" value={data.activity.id} />
 						<button type="submit">Start new attempt</button>
 					</form>
 				{/if}

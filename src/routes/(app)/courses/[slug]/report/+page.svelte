@@ -32,7 +32,7 @@
 	{:else}
 		<p class="muted">
 			{data.rows.length} student{data.rows.length === 1 ? '' : 's'} · {completedCount} completed every
-			activity · {data.packages.length} activit{data.packages.length === 1 ? 'y' : 'ies'}
+			activity · {data.activities.length} activit{data.activities.length === 1 ? 'y' : 'ies'}
 		</p>
 
 		<div class="table-wrap">
@@ -44,7 +44,7 @@
 					<tr>
 						<th scope="col">Learner</th>
 						<th scope="col">Completion</th>
-						{#each data.packages as p (p.id)}
+						{#each data.activities as p (p.id)}
 							<th scope="col">
 								{p.title}
 								<span class="muted version">SCORM {p.version}</span>
@@ -75,7 +75,7 @@
 									<span class="muted">—</span>
 								{/if}
 							</td>
-							{#each r.cells as cell, i (data.packages[i].id)}
+							{#each r.cells as cell, i (data.activities[i].id)}
 								<td>
 									{#if cell.locked && !cell.attempt}
 										<span class="badge">Locked</span>
@@ -95,15 +95,17 @@
 											attempt{cell.attemptCount === 1 && !cell.attemptsAllowed ? '' : 's'}
 										</span>
 									{/if}
-									{#if resultFor(form, 'grantAttempt', `${data.packages[i].id}:${r.userId}`)?.ok}
+									{#if resultFor(form, 'grantAttempt', `${data.activities[i].id}:${r.userId}`)?.ok}
 										<span class="badge success" role="status">Granted</span>
 									{:else if data.canGrant && cell.outOfAttempts}
 										<form method="POST" action="?/grantAttempt" use:enhance>
-											<input type="hidden" name="packageId" value={data.packages[i].id} />
+											<input type="hidden" name="activityId" value={data.activities[i].id} />
 											<input type="hidden" name="userId" value={r.userId} />
 											<button type="submit" class="secondary small grant">
 												Grant attempt
-												<span class="visually-hidden">to {r.name} on {data.packages[i].title}</span>
+												<span class="visually-hidden"
+													>to {r.name} on {data.activities[i].title}</span
+												>
 											</button>
 										</form>
 									{/if}
