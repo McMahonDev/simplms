@@ -13,11 +13,14 @@ const LOCK_MINUTES = 15;
 
 export type JobRunResult = { name: string; status: 'ok' | 'error' | 'skipped'; result: string };
 
-/** Creates rows for newly registered jobs, due immediately. */
+/**
+ * Creates rows for newly registered jobs, due immediately. (The column default is the database's
+ * now(), which can be later than the `now` a tick compares against, delaying the first run.)
+ */
 async function syncJobRows() {
 	await db
 		.insert(jobTable)
-		.values(jobs.map((j) => ({ name: j.name })))
+		.values(jobs.map((j) => ({ name: j.name, nextRunAt: new Date(0) })))
 		.onConflictDoNothing();
 }
 

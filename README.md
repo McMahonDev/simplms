@@ -58,8 +58,9 @@ both SCORM 1.2 and SCORM 2004 (bundled in `fixtures/scorm/`, CC BY 3.0).
    join the course. Visiting `/admin` returns 403.
 7. Sign in as `admin` for the admin area: users, categories, and courses.
 8. In the teacher's **Report**, a learner who used up their attempts without completing gets a
-   **Grant attempt** button. They're notified (see **Notifications** in the header). Admins can
-   see and run scheduled jobs at Admin › **Jobs**.
+   **Grant attempt** button. They're notified (see **Notifications** in the header), and the
+   email appears in the dev server's log. **Email settings** on the notifications page turns
+   emails off per type. Admins can see and run scheduled jobs at Admin › **Jobs**.
 9. Sign in as `student3`. On **Courses**, join Data Privacy Basics with one click and Workplace
    Safety with the code `SAFETY-2026`.
 
@@ -101,6 +102,9 @@ All configuration comes from environment variables, validated with Zod at startu
 | `SCORM_MAX_FILES`           | `20000`                                             | Files per package                                                                                   |
 | `JOBS_SCHEDULER`            | `true`                                              | Run scheduled jobs inside the app server every minute                                               |
 | `CRON_SECRET`               | unset                                               | Enables `POST /api/jobs/run` for an external cron (`Authorization: Bearer …`)                       |
+| `MAIL_TRANSPORT`            | `log`                                               | `log` prints notification emails to the server log; `resend` sends them via Resend                  |
+| `MAIL_FROM`                 | `SimpLMS <no-reply@simplms.test>`                   | Sender address (must be a verified domain for Resend)                                               |
+| `RESEND_API_KEY`            | unset                                               | Required when `MAIL_TRANSPORT=resend`                                                               |
 | `BODY_SIZE_LIMIT`           | adapter-node default (512K)                         | Production only. Set it above the upload limit, e.g. `600M`                                         |
 
 Behind a reverse proxy, also set adapter-node's `PROTOCOL_HEADER` and `HOST_HEADER`.
