@@ -8,7 +8,8 @@
 		[
 			{ href: '/admin/courses', label: 'Courses', show: true },
 			{ href: '/admin/categories', label: 'Categories', show: data.adminCaps['categories:manage'] },
-			{ href: '/admin/users', label: 'Users', show: data.adminCaps['users:view'] }
+			{ href: '/admin/users', label: 'Users', show: data.adminCaps['users:view'] },
+			{ href: '/admin/jobs', label: 'Jobs', show: data.adminCaps['jobs:manage'] }
 		].filter((t) => t.show)
 	);
 </script>

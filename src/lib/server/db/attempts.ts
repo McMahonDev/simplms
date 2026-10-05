@@ -1,7 +1,7 @@
-import { and, desc, eq, max } from 'drizzle-orm';
+import { and, desc, eq, inArray, max, sql } from 'drizzle-orm';
 import type { NormalizedCommit } from '../scorm/cmi.js';
 import { db } from './index.js';
-import { scormAttempt, scormPackage } from './schema.js';
+import { attemptGrant, scormAttempt, scormPackage } from './schema.js';
 
 /**
  * Returns the user's latest attempt for a package, creating attempt #1 if none exists.
@@ -42,6 +42,29 @@ export async function startNewAttempt(packageId: string, userId: string) {
 		.insert(scormAttempt)
 		.values({ packageId, userId, attemptNumber: (latest ?? 0) + 1 })
 		.onConflictDoNothing();
+}
+
+/** Gives one learner one more attempt on an activity, beyond its limit. */
+export async function grantAttempt(packageId: string, userId: string) {
+	await db
+		.insert(attemptGrant)
+		.values({ packageId, userId, extraAttempts: 1 })
+		.onConflictDoUpdate({
+			target: [attemptGrant.packageId, attemptGrant.userId],
+			set: { extraAttempts: sql`${attemptGrant.extraAttempts} + 1` }
+		});
+}
+
+/** Extra attempts granted, keyed "packageId:userId" (missing means none). */
+export async function attemptGrants(packageIds: string[], userIds: string[]) {
+	const grants = new Map<string, number>();
+	if (packageIds.length === 0 || userIds.length === 0) return grants;
+	const rows = await db
+		.select()
+		.from(attemptGrant)
+		.where(and(inArray(attemptGrant.packageId, packageIds), inArray(attemptGrant.userId, userIds)));
+	for (const r of rows) grants.set(`${r.packageId}:${r.userId}`, r.extraAttempts);
+	return grants;
 }
 
 /**

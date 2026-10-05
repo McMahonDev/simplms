@@ -32,6 +32,17 @@
 			</ul>
 		</nav>
 		<div class="account">
+			<a
+				class="bell"
+				href="/notifications"
+				aria-current={isCurrent('/notifications') ? 'page' : undefined}
+			>
+				Notifications
+				{#if data.nav.unread > 0}
+					<span class="count">{data.nav.unread > 99 ? '99+' : data.nav.unread}</span>
+					<span class="visually-hidden">unread</span>
+				{/if}
+			</a>
 			<span class="who" title={data.user.email}>{data.user.name}</span>
 			<form method="POST" action="/sign-out">
 				<button type="submit" class="secondary small">Sign out</button>
@@ -130,5 +141,29 @@
 		max-width: var(--content-width);
 		margin-inline: auto;
 		padding: var(--space-l) var(--space-m) var(--space-2xl);
+	}
+
+	.bell {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		font-size: var(--text-s);
+		text-decoration: none;
+		color: inherit;
+
+		&[aria-current='page'] {
+			text-decoration: underline;
+		}
+	}
+
+	.count {
+		min-width: 1.25rem;
+		padding: 0 var(--space-3xs);
+		border-radius: 999px;
+		background: var(--color-primary);
+		color: var(--color-on-primary);
+		font-size: var(--text-xs);
+		font-weight: 700;
+		text-align: center;
 	}
 </style>

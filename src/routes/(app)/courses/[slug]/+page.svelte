@@ -86,10 +86,10 @@
 								<p class="muted meta">
 									SCORM {a.version} · To complete: {a.criteria.toLowerCase()}
 									{#if a.attempt?.scoreRaw != null}· Score {a.attempt.scoreRaw}{/if}
-									{#if a.attemptCount > 0 && (a.maxAttempts || a.attemptCount > 1)}
-										· Attempt {a.attemptCount}{#if a.maxAttempts}&nbsp;of {a.maxAttempts}{/if}
-									{:else if a.maxAttempts}
-										· {a.maxAttempts} attempt{a.maxAttempts === 1 ? '' : 's'} allowed
+									{#if a.attemptCount > 0 && (a.attemptsAllowed || a.attemptCount > 1)}
+										· Attempt {a.attemptCount}{#if a.attemptsAllowed}&nbsp;of {a.attemptsAllowed}{/if}
+									{:else if a.attemptsAllowed}
+										· {a.attemptsAllowed} attempt{a.attemptsAllowed === 1 ? '' : 's'} allowed
 									{/if}
 								</p>
 								{#if locked}

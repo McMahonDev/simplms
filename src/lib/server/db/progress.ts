@@ -4,12 +4,14 @@
  */
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import {
+	attemptsAllowed,
 	canStartNewAttempt,
 	evaluateActivities,
 	isFinished,
 	resultAttempt,
 	resultOf
 } from '../completion.js';
+import { attemptGrants } from './attempts.js';
 import { db } from './index.js';
 import {
 	type CompletionStatus,
@@ -73,15 +75,17 @@ export async function attemptHistory(
 /** The course's packages, each with this user's latest attempt (if any). */
 export async function packagesWithProgress(courseId: string, userId: string) {
 	const packages = await listPackages(courseId);
-	const history = await attemptHistory(
-		packages.map((p) => p.id),
-		[userId]
-	);
+	const ids = packages.map((p) => p.id);
+	const [history, grants] = await Promise.all([
+		attemptHistory(ids, [userId]),
+		attemptGrants(ids, [userId])
+	]);
 	const attemptsOf = (id: string) => history.get(`${id}:${userId}`) ?? [];
 	const states = evaluateActivities(packages, attemptsOf);
 	return packages.map((p) => {
 		const attempts = attemptsOf(p.id);
 		const shown = resultAttempt(attempts, p);
+		const allowed = attemptsAllowed(p.maxAttempts, grants.get(`${p.id}:${userId}`));
 		return {
 			...p,
 			...states.get(p.id)!,
@@ -89,7 +93,9 @@ export async function packagesWithProgress(courseId: string, userId: string) {
 			latest: attempts.at(-1) ?? null,
 			/** The latest attempt is over, so relaunching opens it in review mode. */
 			finished: attempts.length > 0 && isFinished(attempts.at(-1)!),
-			canRetake: canStartNewAttempt(attempts, p.maxAttempts),
+			/** The limit plus attempts a teacher granted this learner; null means unlimited. */
+			attemptsAllowed: allowed,
+			canRetake: canStartNewAttempt(attempts, allowed),
 			/** The attempt that counts: the first that met the rule, else the latest. */
 			attempt: shown,
 			result: shown ? resultOf(shown, p) : null

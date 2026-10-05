@@ -10,7 +10,8 @@ export const load: LayoutServerLoad = async (event) => {
 			'users:view',
 			'users:manage',
 			'categories:manage',
-			'courses:create'
+			'courses:create',
+			'jobs:manage'
 		])
 	};
 };

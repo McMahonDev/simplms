@@ -279,3 +279,47 @@ test('finished attempts open for review; retakes are limited by the attempt sett
 	});
 	expect(await response.text()).toContain('used all your attempts');
 });
+
+test('teachers grant extra attempts; learners are notified; admins run jobs', async ({ page }) => {
+	// student1 (Sam Student) used both attempts at SCORM 1.2 in the previous test without meeting
+	// its 90+ passing score.
+	await signIn(page, 'teacher2@simplms.test');
+	await page.goto('/courses/golf-fundamentals/report');
+	const row = page.getByRole('row').filter({ hasText: 'Sam Student' });
+	await row.getByRole('button', { name: /Grant attempt.*SCORM 1\.2/ }).click();
+	await expect(row.getByText('Granted')).toBeVisible();
+	await signOut(page);
+
+	await signIn(page, 'student1@simplms.test');
+	await expect(page.getByRole('link', { name: /Notifications 1 unread/ })).toBeVisible();
+	await page.getByRole('link', { name: /Notifications/ }).click();
+	await page
+		.getByRole('button', { name: /You have another attempt at Golf Explained \(SCORM 1\.2\)/ })
+		.click();
+	await expect(page).toHaveURL(/\/courses\/golf-fundamentals$/);
+	const activity = page
+		.getByRole('listitem')
+		.filter({ has: page.getByRole('heading', { name: 'Golf Explained (SCORM 1.2)' }) });
+	await expect(activity.getByText('Attempt 2 of 3')).toBeVisible();
+	await expect(activity.getByRole('button', { name: /Start new attempt/ })).toBeVisible();
+	await expect(page.getByRole('link', { name: /unread/ })).toHaveCount(0);
+	await signOut(page);
+
+	// student5 was enrolled by a teacher in an earlier test.
+	await signIn(page, 'student5@simplms.test');
+	await page.goto('/notifications');
+	await expect(page.getByText('You were added to Golf Fundamentals')).toBeVisible();
+	await signOut(page);
+
+	await signIn(page, 'admin@simplms.test');
+	await page.goto('/admin/jobs');
+	const job = page.getByRole('row').filter({ hasText: 'course-reminders' });
+	await job.getByRole('button', { name: /Run now/ }).click();
+	await expect(job.getByText(/^Done: /)).toBeVisible();
+	await expect(job.getByText('OK', { exact: true })).toBeVisible();
+	await signOut(page);
+
+	// Jobs are admin-only; managers can't reach them.
+	await signIn(page, 'manager@simplms.test');
+	expect((await page.goto('/admin/jobs'))?.status()).toBe(403);
+});

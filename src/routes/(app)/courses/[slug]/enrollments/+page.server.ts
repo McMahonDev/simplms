@@ -11,6 +11,7 @@ import {
 	removeEnrollment,
 	updateEnrollment
 } from '#lib/server/db/enrollments.js';
+import { messages, notify } from '#lib/server/notifications.js';
 import { formError, formFields, parseForm } from '#lib/server/validation.js';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -95,6 +96,7 @@ export const actions: Actions = {
 			}
 			throw err;
 		}
+		await notify(messages.enrolled(userId, course, parsed.data.role)).catch(() => {});
 		return { action: 'enroll', ok: true, message: `Enrolled ${parsed.data.email}.` };
 	},
 
