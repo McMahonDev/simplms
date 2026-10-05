@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { error } from '@sveltejs/kit';
 import { z } from 'zod';
+import { isFinished } from '#lib/server/completion.js';
 import { loadCourseFor } from '#lib/server/course-context.js';
 import { getOrCreateCurrentAttempt, touchAttempt } from '#lib/server/db/attempts.js';
 import { getCoursePackage } from '#lib/server/db/packages.js';
@@ -16,16 +17,17 @@ export const load: PageServerLoad = async (event) => {
 	const pkg = packageId.success ? await getCoursePackage(course.id, packageId.data) : null;
 	if (!pkg) error(404, 'Activity not found');
 
+	const activity = (await packagesWithProgress(course.id, user.id)).find((a) => a.id === pkg.id)!;
 	// Learners can't open an activity until its prerequisites are complete; staff can preview.
-	if (!(await can(user, 'course:edit', course.id))) {
-		const activity = (await packagesWithProgress(course.id, user.id)).find((a) => a.id === pkg.id);
-		if (activity && activity.lockedBy.length > 0) {
-			error(403, `This activity is locked. Complete ${activity.lockedBy.join(', ')} first.`);
-		}
+	if (activity.lockedBy.length > 0 && !(await can(user, 'course:edit', course.id))) {
+		error(403, `This activity is locked. Complete ${activity.lockedBy.join(', ')} first.`);
 	}
 
 	const attempt = await getOrCreateCurrentAttempt(pkg.id, user.id);
 	await touchAttempt(attempt.id);
+	// A finished attempt reopens read-only; retakes start a new attempt from the course page.
+	const review = isFinished(attempt);
+	const attemptsUsed = Math.max(activity.attemptCount, 1);
 
 	// Each page load is one SCORM session; the id lets the commit endpoint accumulate time.
 	const sessionId = randomUUID();
@@ -40,13 +42,20 @@ export const load: PageServerLoad = async (event) => {
 	return {
 		course: { slug: course.slug, title: course.title },
 		activity: { id: pkg.id, title: pkg.title, version: pkg.version },
+		attempt: {
+			number: attempt.attemptNumber,
+			max: pkg.maxAttempts,
+			review,
+			canRetake: review && (pkg.maxAttempts == null || attemptsUsed < pkg.maxAttempts)
+		},
 		launchUrl: `/scorm/content/${pkg.id}/${encodedHref}`,
 		commitUrl: `/api/scorm/attempts/${attempt.id}/commit?session=${sessionId}`,
 		cmi: buildLaunchCmi(
 			pkg.version,
 			attempt.cmiJson as Record<string, unknown>,
 			attempt.totalTime,
-			{ id: user.id, name: user.name }
+			{ id: user.id, name: user.name },
+			review ? 'review' : 'normal'
 		)
 	};
 };

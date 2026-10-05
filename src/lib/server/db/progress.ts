@@ -1,9 +1,15 @@
 /**
  * Read-side progress queries shared by the course page, dashboard, and report.
- * "Progress" for a package is the user's latest attempt (highest attempt_number).
+ * Every attempt is loaded: an activity is complete when any attempt meets its rule.
  */
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import { evaluateActivities } from '../completion.js';
+import {
+	canStartNewAttempt,
+	evaluateActivities,
+	isFinished,
+	resultAttempt,
+	resultOf
+} from '../completion.js';
 import { db } from './index.js';
 import {
 	type CompletionStatus,
@@ -37,45 +43,58 @@ const attemptColumns = {
 	lastAccessedAt: scormAttempt.lastAccessedAt
 };
 
-/** Keeps only the highest attempt per (package, user). */
-function latestOnly(rows: AttemptSummary[]): Map<string, AttemptSummary> {
-	const latest = new Map<string, AttemptSummary>();
-	for (const row of rows) {
-		const key = `${row.packageId}:${row.userId}`;
-		const seen = latest.get(key);
-		if (!seen || row.attemptNumber > seen.attemptNumber) latest.set(key, row);
-	}
-	return latest;
-}
+/** Attempts for each (package, user), keyed "packageId:userId", in attempt order. */
+export type AttemptHistory = Map<string, AttemptSummary[]>;
 
 /** A course's activities in order, with their completion rules and prerequisites. */
 export async function listPackages(courseId: string) {
 	return packagesForCourses([courseId]);
 }
 
-/** Latest attempts for the given users across the given packages, keyed "packageId:userId". */
-export async function latestAttempts(packageIds: string[], userIds: string[]) {
-	if (packageIds.length === 0 || userIds.length === 0) return new Map<string, AttemptSummary>();
+/** Every attempt by the given users on the given packages, keyed "packageId:userId". */
+export async function attemptHistory(
+	packageIds: string[],
+	userIds: string[]
+): Promise<AttemptHistory> {
+	const history: AttemptHistory = new Map();
+	if (packageIds.length === 0 || userIds.length === 0) return history;
 	const rows = await db
 		.select(attemptColumns)
 		.from(scormAttempt)
-		.where(and(inArray(scormAttempt.packageId, packageIds), inArray(scormAttempt.userId, userIds)));
-	return latestOnly(rows);
+		.where(and(inArray(scormAttempt.packageId, packageIds), inArray(scormAttempt.userId, userIds)))
+		.orderBy(asc(scormAttempt.attemptNumber));
+	for (const row of rows) {
+		const key = `${row.packageId}:${row.userId}`;
+		history.set(key, [...(history.get(key) ?? []), row]);
+	}
+	return history;
 }
 
 /** The course's packages, each with this user's latest attempt (if any). */
 export async function packagesWithProgress(courseId: string, userId: string) {
 	const packages = await listPackages(courseId);
-	const attempts = await latestAttempts(
+	const history = await attemptHistory(
 		packages.map((p) => p.id),
 		[userId]
 	);
-	const states = evaluateActivities(packages, (id) => attempts.get(`${id}:${userId}`));
-	return packages.map((p) => ({
-		...p,
-		attempt: attempts.get(`${p.id}:${userId}`) ?? null,
-		...states.get(p.id)!
-	}));
+	const attemptsOf = (id: string) => history.get(`${id}:${userId}`) ?? [];
+	const states = evaluateActivities(packages, attemptsOf);
+	return packages.map((p) => {
+		const attempts = attemptsOf(p.id);
+		const shown = resultAttempt(attempts, p);
+		return {
+			...p,
+			...states.get(p.id)!,
+			attemptCount: attempts.length,
+			latest: attempts.at(-1) ?? null,
+			/** The latest attempt is over, so relaunching opens it in review mode. */
+			finished: attempts.length > 0 && isFinished(attempts.at(-1)!),
+			canRetake: canStartNewAttempt(attempts, p.maxAttempts),
+			/** The attempt that counts: the first that met the rule, else the latest. */
+			attempt: shown,
+			result: shown ? resultOf(shown, p) : null
+		};
+	});
 }
 
 /** The user's active enrollments with course info, for the dashboard. */
@@ -108,7 +127,8 @@ export async function packagesForCourses(courseIds: string[]) {
 			sortOrder: scormPackage.sortOrder,
 			createdAt: scormPackage.createdAt,
 			completionRule: scormPackage.completionRule,
-			completionMinScore: scormPackage.completionMinScore
+			completionMinScore: scormPackage.completionMinScore,
+			maxAttempts: scormPackage.maxAttempts
 		})
 		.from(scormPackage)
 		.where(inArray(scormPackage.courseId, courseIds))

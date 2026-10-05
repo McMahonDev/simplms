@@ -189,17 +189,17 @@ test('activities stay locked until prerequisites are complete; teachers set comp
 	const lockedUrl = new URL(page.url()).pathname;
 	const contentUrl = await page.locator('iframe.sco').getAttribute('src');
 
-	// Require a pass with 90+ on the 1.2 activity.
+	// Require a score of 90+ on the 1.2 activity.
 	await page.goto('/courses/golf-fundamentals/manage');
 	const first = page.getByRole('listitem').filter({
 		has: page.getByRole('link', { name: 'Golf Explained (SCORM 1.2)', exact: true })
 	});
 	await first.locator('summary', { hasText: 'Settings' }).click();
 	await first.getByLabel('Complete when the learner').selectOption('passed');
-	await first.getByLabel(/Minimum score/).fill('90');
+	await first.getByLabel('Passing score').fill('90');
 	await first.getByRole('button', { name: 'Save settings' }).click();
 	await expect(first.getByText('Settings saved.')).toBeVisible();
-	await expect(first.getByText('Pass it with a score of at least 90')).toBeVisible();
+	await expect(first.getByText('Score at least 90')).toBeVisible();
 
 	// Making 1.2 require 2004 would lock both forever.
 	await first.getByRole('checkbox', { name: 'Golf Explained (SCORM 2004)' }).check();
@@ -217,11 +217,65 @@ test('activities stay locked until prerequisites are complete; teachers set comp
 	await expect(locked.getByText('Complete Golf Explained (SCORM 1.2) first.')).toBeVisible();
 	await expect(locked.getByRole('link')).toHaveCount(0);
 	await expect(
-		activity('Golf Explained (SCORM 1.2)').getByText(
-			'To complete: pass it with a score of at least 90'
-		)
+		activity('Golf Explained (SCORM 1.2)').getByText('To complete: score at least 90')
 	).toBeVisible();
 
 	expect((await page.goto(lockedUrl))?.status()).toBe(403);
 	expect((await page.request.get(contentUrl!)).status()).toBe(403);
+});
+
+test('finished attempts open for review; retakes are limited by the attempt setting', async ({
+	page
+}) => {
+	// student1 finished the SCORM 1.2 activity in the first test. Allow two attempts.
+	await signIn(page, 'teacher2@simplms.test');
+	await page.goto('/courses/golf-fundamentals/manage');
+	const settings = page.getByRole('listitem').filter({
+		has: page.getByRole('link', { name: 'Golf Explained (SCORM 1.2)', exact: true })
+	});
+	await settings.locator('summary', { hasText: 'Settings' }).click();
+	await settings.getByLabel('Attempts allowed').fill('2');
+	await settings.getByRole('button', { name: 'Save settings' }).click();
+	await expect(settings.getByText('Settings saved.')).toBeVisible();
+	await signOut(page);
+
+	await signIn(page, 'student1@simplms.test');
+	await page.goto('/courses/golf-fundamentals');
+	const activity = page
+		.getByRole('listitem')
+		.filter({ has: page.getByRole('heading', { name: 'Golf Explained (SCORM 1.2)' }) });
+	await expect(activity.getByText('Attempt 1 of 2')).toBeVisible();
+
+	// Reopening the finished attempt is review only.
+	await activity.getByRole('link', { name: /^Review/ }).click();
+	await expect(page.getByText('Review only')).toBeVisible();
+	await expect(page.getByText('Attempt 1 of 2')).toBeVisible();
+
+	// Start the second (last) attempt from the player and finish it.
+	page.on('dialog', (dialog) => dialog.accept());
+	await page.getByRole('button', { name: 'Start new attempt' }).click();
+	await expect(page.getByText('Attempt 2 of 2')).toBeVisible();
+	await expect(page.getByText('Review only')).toHaveCount(0);
+	const next = page.frameLocator('iframe.sco').getByRole('button', { name: 'Next ->' });
+	while (await next.isEnabled()) await next.click();
+	await page.getByRole('button', { name: 'Exit', exact: true }).click();
+	await expect(page).toHaveURL(/\/courses\/golf-fundamentals$/);
+
+	// Both attempts used: review is still available, a third attempt is not.
+	await expect(activity.getByText('Attempt 2 of 2')).toBeVisible();
+	await expect(activity.getByRole('link', { name: /^Review/ })).toBeVisible();
+	await expect(activity.getByRole('button', { name: /Start new attempt/ })).toHaveCount(0);
+
+	// The server refuses a third attempt even if the form is posted directly.
+	const packageId = new URL(
+		(await activity.getByRole('link', { name: /^Review/ }).getAttribute('href'))!,
+		page.url()
+	).pathname
+		.split('/')
+		.at(-1)!;
+	const response = await page.request.post('/courses/golf-fundamentals?/retake', {
+		form: { packageId },
+		headers: { origin: new URL(page.url()).origin, 'x-sveltekit-action': 'true' }
+	});
+	expect(await response.text()).toContain('used all your attempts');
 });

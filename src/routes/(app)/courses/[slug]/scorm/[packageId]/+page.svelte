@@ -129,9 +129,25 @@
 			<a href="/courses/{data.course.slug}" class="muted course">{data.course.title}</a>
 			<h1>{data.activity.title}</h1>
 		</div>
-		<button type="button" class="secondary" onclick={exit} disabled={status === 'exiting'}>
-			{status === 'exiting' ? 'Saving…' : 'Exit'}
-		</button>
+		<div class="cluster actions">
+			<span class="muted attempt">
+				Attempt {data.attempt.number}{#if data.attempt.max}&nbsp;of {data.attempt.max}{/if}
+			</span>
+			{#if data.attempt.review}
+				<span class="badge warning" title="This attempt is finished. Nothing you do here is saved."
+					>Review only</span
+				>
+				{#if data.attempt.canRetake}
+					<form method="POST" action="/courses/{data.course.slug}?/retake">
+						<input type="hidden" name="packageId" value={data.activity.id} />
+						<button type="submit">Start new attempt</button>
+					</form>
+				{/if}
+			{/if}
+			<button type="button" class="secondary" onclick={exit} disabled={status === 'exiting'}>
+				{status === 'exiting' ? 'Saving…' : 'Exit'}
+			</button>
+		</div>
 	</div>
 
 	<div class="stage">
@@ -186,6 +202,16 @@
 			overflow: hidden;
 			text-overflow: ellipsis;
 		}
+	}
+
+	.actions {
+		flex-wrap: nowrap;
+		justify-content: end;
+	}
+
+	.attempt {
+		font-size: var(--text-xs);
+		white-space: nowrap;
 	}
 
 	.course {

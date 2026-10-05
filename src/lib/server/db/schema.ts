@@ -128,8 +128,10 @@ export const scormPackage = pgTable(
 		manifestJson: jsonb('manifest_json').notNull(),
 		sortOrder: integer('sort_order').notNull().default(0),
 		completionRule: completionRule('completion_rule').notNull().default('completed'),
-		/** When set, the latest attempt's raw score must also be at least this. */
+		/** Passing score for the 'passed' rule; replaces the package's own pass mark when set. */
 		completionMinScore: doublePrecision('completion_min_score'),
+		/** Attempts each learner may start; null means unlimited. */
+		maxAttempts: integer('max_attempts'),
 		...timestamps()
 	},
 	(t) => [index().on(t.courseId)]

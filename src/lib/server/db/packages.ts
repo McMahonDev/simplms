@@ -54,6 +54,7 @@ export async function renamePackage(courseId: string, packageId: string, title: 
 export type ActivitySettings = {
 	completionRule: CompletionRule;
 	completionMinScore: number | null;
+	maxAttempts: number | null;
 	/** Must already be checked to belong to the same course and not form a cycle. */
 	requires: string[];
 };
@@ -69,7 +70,8 @@ export async function updateActivitySettings(
 			.update(scormPackage)
 			.set({
 				completionRule: settings.completionRule,
-				completionMinScore: settings.completionMinScore
+				completionMinScore: settings.completionMinScore,
+				maxAttempts: settings.maxAttempts
 			})
 			.where(and(eq(scormPackage.id, packageId), eq(scormPackage.courseId, courseId)))
 			.returning({ id: scormPackage.id });

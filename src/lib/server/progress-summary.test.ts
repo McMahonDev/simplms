@@ -42,8 +42,8 @@ describe('summarizeProgress', () => {
 
 	it('counts completed and passed activities and finds the next one', () => {
 		const attempts = new Map([
-			['a:u', attempt('a', 'incomplete', 'passed')],
-			['b:u', attempt('b', 'incomplete')]
+			['a:u', [attempt('a', 'incomplete', 'passed')]],
+			['b:u', [attempt('b', 'incomplete')]]
 		]);
 		expect(summarizeProgress(packages, attempts, 'u')).toEqual({
 			total: 3,
@@ -55,7 +55,7 @@ describe('summarizeProgress', () => {
 	});
 
 	it('reports 100% with no next activity when everything is done', () => {
-		const attempts = new Map(packages.map((p) => [`${p.id}:u`, attempt(p.id, 'completed')]));
+		const attempts = new Map(packages.map((p) => [`${p.id}:u`, [attempt(p.id, 'completed')]]));
 		const result = summarizeProgress(packages, attempts, 'u');
 		expect(result.percent).toBe(100);
 		expect(result.nextPackageId).toBeNull();
@@ -64,8 +64,8 @@ describe('summarizeProgress', () => {
 	it("applies each activity's own rule", () => {
 		const strict = [activity('a', { completionRule: 'passed' }), activity('b')];
 		const attempts = new Map([
-			['a:u', attempt('a', 'completed', 'failed')],
-			['b:u', attempt('b', 'completed')]
+			['a:u', [attempt('a', 'completed', 'failed')]],
+			['b:u', [attempt('b', 'completed')]]
 		]);
 		const result = summarizeProgress(strict, attempts, 'u');
 		expect(result.completed).toBe(1);
@@ -79,7 +79,7 @@ describe('summarizeProgress', () => {
 			activity('b', { requires: ['a'] }),
 			activity('c')
 		];
-		const failed = new Map([['a:u', attempt('a', 'completed', 'failed')]]);
+		const failed = new Map([['a:u', [attempt('a', 'completed', 'failed')]]]);
 		expect(summarizeProgress(gated, failed, 'u').nextPackageId).toBe('a');
 
 		// With a done-but-not-passed a moved last, b is still locked, so c is next.

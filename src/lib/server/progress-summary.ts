@@ -1,5 +1,5 @@
 import { type ActivityRules, evaluateActivities } from './completion.js';
-import type { AttemptSummary } from './db/progress.js';
+import type { AttemptHistory } from './db/progress.js';
 
 export type CourseProgress = {
 	total: number;
@@ -16,17 +16,17 @@ export type CourseProgress = {
  */
 export function summarizeProgress(
 	packages: ActivityRules[],
-	attempts: Map<string, AttemptSummary>,
+	attempts: AttemptHistory,
 	userId: string
 ): CourseProgress {
-	const states = evaluateActivities(packages, (id) => attempts.get(`${id}:${userId}`));
+	const attemptsOf = (id: string) => attempts.get(`${id}:${userId}`) ?? [];
+	const states = evaluateActivities(packages, attemptsOf);
 	let completed = 0;
 	let started = false;
 	let nextPackageId: string | null = null;
 	for (const p of packages) {
-		const attempt = attempts.get(`${p.id}:${userId}`);
 		const state = states.get(p.id)!;
-		if (attempt && attempt.completionStatus !== 'not attempted') started = true;
+		if (attemptsOf(p.id).some((a) => a.completionStatus !== 'not attempted')) started = true;
 		if (state.complete) completed += 1;
 		else if (state.lockedBy.length === 0) nextPackageId ??= p.id;
 	}

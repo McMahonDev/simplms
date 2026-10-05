@@ -86,6 +86,11 @@
 								<p class="muted meta">
 									SCORM {a.version} · To complete: {a.criteria.toLowerCase()}
 									{#if a.attempt?.scoreRaw != null}· Score {a.attempt.scoreRaw}{/if}
+									{#if a.attemptCount > 0 && (a.maxAttempts || a.attemptCount > 1)}
+										· Attempt {a.attemptCount}{#if a.maxAttempts}&nbsp;of {a.maxAttempts}{/if}
+									{:else if a.maxAttempts}
+										· {a.maxAttempts} attempt{a.maxAttempts === 1 ? '' : 's'} allowed
+									{/if}
 								</p>
 								{#if locked}
 									<p class="meta lock">Complete {a.lockedBy.join(', ')} first.</p>
@@ -94,22 +99,42 @@
 							{#if locked && !a.complete}
 								<span class="badge">Locked</span>
 							{:else}
-								<StatusBadge attempt={a.attempt} complete={a.complete} />
+								<StatusBadge attempt={a.attempt} complete={a.complete} result={a.result} />
 							{/if}
 							{#if data.caps['scorm:launch'] && (!locked || data.caps['course:edit'])}
-								<a
-									class="button {locked ? 'secondary' : ''}"
-									href="/courses/{data.course.slug}/scorm/{a.id}"
-								>
+								<div class="cluster launch">
 									{#if locked}
-										Preview
+										<a class="button secondary" href="/courses/{data.course.slug}/scorm/{a.id}">
+											Preview <span class="visually-hidden">{a.title}</span>
+										</a>
+									{:else if a.finished}
+										<a class="button secondary" href="/courses/{data.course.slug}/scorm/{a.id}">
+											Review <span class="visually-hidden">{a.title}</span>
+										</a>
+										{#if a.canRetake}
+											<form method="POST" action="?/retake">
+												<input type="hidden" name="packageId" value={a.id} />
+												<button type="submit">
+													Start new attempt <span class="visually-hidden">{a.title}</span>
+												</button>
+											</form>
+										{:else if !a.complete}
+											<span class="muted meta">No attempts left</span>
+										{/if}
 									{:else}
-										{a.attempt && a.attempt.completionStatus !== 'not attempted'
-											? 'Continue'
-											: 'Start'}
+										<a class="button" href="/courses/{data.course.slug}/scorm/{a.id}">
+											{a.latest && a.latest.completionStatus !== 'not attempted'
+												? 'Continue'
+												: 'Start'}
+											<span class="visually-hidden">{a.title}</span>
+										</a>
 									{/if}
-									<span class="visually-hidden">{a.title}</span>
-								</a>
+								</div>
+							{/if}
+							{#if resultFor(form, 'retake', a.id)?.message}
+								<p class="alert error retake-error" role="alert">
+									{resultFor(form, 'retake', a.id)?.message}
+								</p>
 							{/if}
 						</li>
 					{/each}
@@ -174,6 +199,14 @@
 		& .info {
 			flex: 1 1 14rem;
 		}
+	}
+
+	.launch {
+		flex-wrap: nowrap;
+	}
+
+	.retake-error {
+		flex-basis: 100%;
 	}
 
 	.locked h3 {

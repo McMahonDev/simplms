@@ -56,6 +56,11 @@ const activitySettingsSchema = z.object({
 		.trim()
 		.transform((v) => (v === '' ? null : Number(v)))
 		.pipe(z.number('Enter a number').min(0).max(1000).nullable()),
+	maxAttempts: z
+		.string()
+		.trim()
+		.transform((v) => (v === '' ? null : Number(v)))
+		.pipe(z.number().int().min(1).max(100).nullable()),
 	requires: z.array(formFields.uuid()).max(100)
 });
 
@@ -131,21 +136,26 @@ export const actions: Actions = {
 			packageId: formData.get('packageId'),
 			completionRule: formData.get('completionRule'),
 			completionMinScore: formData.get('completionMinScore') ?? '',
+			maxAttempts: formData.get('maxAttempts') ?? '',
 			requires: formData.getAll('requires')
 		});
 		if (!parsed.success) {
 			const id = String(formData.get('packageId') ?? '');
-			const scoreError = parsed.error.issues.some((i) => i.path[0] === 'completionMinScore');
+			const field = parsed.error.issues[0]?.path[0];
 			return fail(400, {
 				action: 'activitySettings',
 				id,
 				...formError(
-					scoreError ? 'Minimum score must be a number from 0 to 1000.' : 'Invalid request.'
+					field === 'completionMinScore'
+						? 'Passing score must be a number from 0 to 1000.'
+						: field === 'maxAttempts'
+							? 'Attempts must be a whole number from 1 to 100, or blank for unlimited.'
+							: 'Invalid request.'
 				)
 			});
 		}
 
-		const { packageId, completionRule, completionMinScore, requires } = parsed.data;
+		const { packageId, completionRule, completionMinScore, maxAttempts, requires } = parsed.data;
 		const activities = await listPackages(course.id);
 		const fail400 = (message: string) =>
 			fail(400, { action: 'activitySettings', id: packageId, ...formError(message) });
@@ -163,7 +173,9 @@ export const actions: Actions = {
 
 		await updateActivitySettings(course.id, packageId, {
 			completionRule,
-			completionMinScore,
+			// The passing score only applies to the "passes it" rule.
+			completionMinScore: completionRule === 'passed' ? completionMinScore : null,
+			maxAttempts,
 			requires: [...new Set(requires)]
 		});
 		return { action: 'activitySettings', id: packageId, ok: true, message: 'Settings saved.' };

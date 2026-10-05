@@ -1,11 +1,11 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, max } from 'drizzle-orm';
 import type { NormalizedCommit } from '../scorm/cmi.js';
 import { db } from './index.js';
 import { scormAttempt, scormPackage } from './schema.js';
 
 /**
  * Returns the user's latest attempt for a package, creating attempt #1 if none exists.
- * Learners always resume their latest attempt (see DECISIONS.md).
+ * Learners always reopen their latest attempt; a finished one opens in review mode.
  */
 export async function getOrCreateCurrentAttempt(packageId: string, userId: string) {
 	const latest = () =>
@@ -29,6 +29,22 @@ export async function getOrCreateCurrentAttempt(packageId: string, userId: strin
 }
 
 /**
+ * Starts the next attempt for a user (latest + 1). The caller checks the attempt limit and that
+ * the latest attempt is finished. A double submit can't create two: the unique
+ * (package, user, attempt_number) index makes the second insert a no-op.
+ */
+export async function startNewAttempt(packageId: string, userId: string) {
+	const [{ latest }] = await db
+		.select({ latest: max(scormAttempt.attemptNumber) })
+		.from(scormAttempt)
+		.where(and(eq(scormAttempt.packageId, packageId), eq(scormAttempt.userId, userId)));
+	await db
+		.insert(scormAttempt)
+		.values({ packageId, userId, attemptNumber: (latest ?? 0) + 1 })
+		.onConflictDoNothing();
+}
+
+/**
  * True when the user has opened the package at least once. The launch page creates the attempt
  * after checking locks, so the content route uses this to keep locked packages closed.
  */
@@ -47,6 +63,9 @@ export async function getAttemptForCommit(attemptId: string) {
 		.select({
 			id: scormAttempt.id,
 			userId: scormAttempt.userId,
+			completionStatus: scormAttempt.completionStatus,
+			successStatus: scormAttempt.successStatus,
+			sessionId: scormAttempt.sessionId,
 			courseId: scormPackage.courseId,
 			version: scormPackage.version
 		})

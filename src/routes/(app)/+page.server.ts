@@ -1,4 +1,4 @@
-import { latestAttempts, myEnrollments, packagesForCourses } from '#lib/server/db/progress.js';
+import { attemptHistory, myEnrollments, packagesForCourses } from '#lib/server/db/progress.js';
 import { requireUser } from '#lib/server/guards.js';
 import { decide, siteRoleOf } from '#lib/server/permissions.js';
 import { summarizeProgress } from '#lib/server/progress-summary.js';
@@ -18,7 +18,7 @@ export const load: PageServerLoad = async (event) => {
 	);
 
 	const packages = await packagesForCourses(enrollments.map((e) => e.courseId));
-	const attempts = await latestAttempts(
+	const attempts = await attemptHistory(
 		packages.map((p) => p.id),
 		[user.id]
 	);

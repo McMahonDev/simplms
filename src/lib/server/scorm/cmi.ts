@@ -163,13 +163,17 @@ export type Learner = { id: string; name: string };
  * - total_time comes from our accumulated column, not the stored CMI.
  * - Write-only elements (exit, session_time) are not replayed. SCORM 1.2 interactions are
  *   write-only too (RTE 3.4.4 cmi.interactions), so they're dropped for 1.2.
+ * - Review mode (a finished attempt reopened) sets lesson_mode/mode to "review" and credit to
+ *   "no-credit" (1.2 RTE 3.4.4 cmi.core.lesson_mode/credit; 2004 RTE 4.2.15 cmi.mode, 4.2.4).
  */
 export function buildLaunchCmi(
 	version: ScormVersion,
 	stored: Cmi,
 	totalSeconds: number,
-	learner: Learner
+	learner: Learner,
+	mode: 'normal' | 'review' = 'normal'
 ): { cmi: Cmi } {
+	const credit = mode === 'review' ? 'no-credit' : 'credit';
 	const cmi = structuredClone((stripMeta(stored) ?? {}) as Cmi);
 	const firstLaunch = Object.keys(cmi).length === 0;
 
@@ -185,6 +189,8 @@ export function buildLaunchCmi(
 		core.student_name = learner.name;
 		core.entry = firstLaunch ? 'ab-initio' : lastExit === 'suspend' ? 'resume' : '';
 		core.total_time = formatScorm12Time(totalSeconds);
+		core.lesson_mode = mode;
+		core.credit = credit;
 		cmi.core = core;
 		return { cmi };
 	}
@@ -198,5 +204,7 @@ export function buildLaunchCmi(
 	cmi.learner_name = learner.name;
 	cmi.entry = firstLaunch ? 'ab-initio' : lastExit === 'suspend' ? 'resume' : '';
 	cmi.total_time = formatIso8601Duration(totalSeconds);
+	cmi.mode = mode;
+	cmi.credit = credit;
 	return { cmi };
 }

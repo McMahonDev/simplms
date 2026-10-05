@@ -1,7 +1,12 @@
 import { loadCourseFor } from '#lib/server/course-context.js';
 import { listStudents } from '#lib/server/db/enrollments.js';
-import { latestAttempts, listPackages } from '#lib/server/db/progress.js';
-import { describeCriteria, evaluateActivities } from '#lib/server/completion.js';
+import { attemptHistory, listPackages } from '#lib/server/db/progress.js';
+import {
+	describeCriteria,
+	evaluateActivities,
+	resultAttempt,
+	resultOf
+} from '#lib/server/completion.js';
 import { summarizeProgress } from '#lib/server/progress-summary.js';
 import type { PageServerLoad } from './$types';
 
@@ -11,31 +16,28 @@ export const load: PageServerLoad = async (event) => {
 		listStudents(course.id),
 		listPackages(course.id)
 	]);
-	const attempts = await latestAttempts(
+	const attempts = await attemptHistory(
 		packages.map((p) => p.id),
 		students.map((s) => s.userId)
 	);
 
 	const rows = students.map((s) => {
-		const states = evaluateActivities(packages, (id) => attempts.get(`${id}:${s.userId}`));
+		const attemptsOf = (id: string) => attempts.get(`${id}:${s.userId}`) ?? [];
+		const states = evaluateActivities(packages, attemptsOf);
 		const cells = packages.map((p) => {
-			const a = attempts.get(`${p.id}:${s.userId}`);
+			const shown = resultAttempt(attemptsOf(p.id), p);
 			const { complete, lockedBy } = states.get(p.id)!;
 			return {
 				complete,
 				locked: lockedBy.length > 0,
-				attempt: a
-					? {
-							completionStatus: a.completionStatus,
-							successStatus: a.successStatus,
-							scoreRaw: a.scoreRaw
-						}
-					: null
+				attemptCount: attemptsOf(p.id).length,
+				attempt: shown
+					? { completionStatus: shown.completionStatus, scoreRaw: shown.scoreRaw }
+					: null,
+				result: shown ? resultOf(shown, p) : null
 			};
 		});
-		const mine = packages
-			.map((p) => attempts.get(`${p.id}:${s.userId}`))
-			.filter((a) => a !== undefined);
+		const mine = packages.flatMap((p) => attemptsOf(p.id));
 		const lastAccess = mine
 			.map((a) => a.lastAccessedAt)
 			.filter((d): d is Date => d !== null)
