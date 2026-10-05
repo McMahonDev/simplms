@@ -113,6 +113,8 @@ async function main() {
 					slug: 'workplace-safety',
 					summary: 'Hazard awareness, incident reporting, and emergency procedures.',
 					visible: true,
+					enrollmentMethod: 'key',
+					enrollmentKey: 'SAFETY-2026',
 					createdBy: userIds.manager
 				},
 				{
@@ -121,6 +123,7 @@ async function main() {
 					slug: 'data-privacy-basics',
 					summary: 'How we collect, store, and protect personal data.',
 					visible: true,
+					enrollmentMethod: 'open',
 					createdBy: userIds.manager
 				},
 				{

@@ -17,7 +17,7 @@ import type { RequestEvent } from '@sveltejs/kit';
 import type { SiteRole } from './auth-options.js';
 import type { SessionUser } from './auth.js';
 import { getCourseAccessFacts } from './db/access.js';
-import type { EnrollmentRole, EnrollmentStatus } from './db/schema.js';
+import type { EnrollmentMethod, EnrollmentRole, EnrollmentStatus } from './db/schema.js';
 import { requireUser } from './guards.js';
 
 /** Capabilities that apply to the whole site. */
@@ -97,6 +97,18 @@ export function decide(capability: Capability, ctx: AccessContext): boolean {
 	// Hidden courses are only reachable by admins, managers, and the course's teachers.
 	if (!course.visible && enrollment.role !== 'teacher') return false;
 	return true;
+}
+
+/**
+ * Whether a user may join a course by themselves (as a student). Only visible courses with an
+ * open or key method qualify, and only for people with no enrollment at all, so a suspended
+ * learner can't rejoin on their own. The key itself is checked by the join action.
+ */
+export function canSelfEnroll(ctx: {
+	course: { visible: boolean; enrollmentMethod: EnrollmentMethod };
+	enrollment: { role: EnrollmentRole; status: EnrollmentStatus } | null;
+}): boolean {
+	return ctx.course.visible && ctx.course.enrollmentMethod !== 'manual' && !ctx.enrollment;
 }
 
 type UserLike = Pick<SessionUser, 'id'> & { role?: string | null };

@@ -24,7 +24,7 @@
 				{#each group.courses as c (c.id)}
 					<li class="card course">
 						<h3>
-							{#if c.canOpen}
+							{#if c.canOpen || c.canJoin}
 								<a href="/courses/{c.slug}">{c.title}</a>
 							{:else}
 								{c.title}
@@ -39,6 +39,11 @@
 								<span class="badge success">Enrolled</span>
 							{:else if c.enrollmentStatus === 'suspended'}
 								<span class="badge danger">Suspended</span>
+							{:else if c.canJoin}
+								<a class="button small" href="/courses/{c.slug}">
+									{c.enrollmentMethod === 'key' ? 'Join with code' : 'Join'}
+									<span class="visually-hidden">{c.title}</span>
+								</a>
 							{:else if !c.canOpen}
 								<span class="muted not-enrolled">Not enrolled. Ask a teacher to add you.</span>
 							{/if}

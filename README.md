@@ -37,7 +37,8 @@ then migrates and seeds again).
 | `student1@simplms.test` … `student5@…` | user      | enrolled across the courses                     |
 
 Categories: **Company › Compliance** (nested) and **Product Training**. Four courses, one of them
-hidden (Product Roadmap 2027). **Golf Fundamentals** contains Rustici's "Golf Examples" packages in
+hidden (Product Roadmap 2027). **Data Privacy Basics** is open to anyone, **Workplace Safety** can be
+joined with the code `SAFETY-2026`, and the rest are assigned-only. **Golf Fundamentals** contains Rustici's "Golf Examples" packages in
 both SCORM 1.2 and SCORM 2004 (bundled in `fixtures/scorm/`, CC BY 3.0).
 
 ### Demo script
@@ -48,9 +49,12 @@ both SCORM 1.2 and SCORM 2004 (bundled in `fixtures/scorm/`, CC BY 3.0).
 4. Page to the end and exit. The activity shows **Completed** and the dashboard progress updates.
 5. Repeat with the SCORM 2004 activity.
 6. Sign in as `teacher2`. Open Golf Fundamentals › **Report** to see completion, score, time, and
-   last access. On **Manage**, upload a package (any zip from `fixtures/scorm/`) and enroll a
-   student by email. Visiting `/admin` returns 403.
+   last access. On **Manage**, upload a package (any zip from `fixtures/scorm/`). On
+   **Enrollments**, enroll a student by email, then suspend or remove them, or change how people
+   join the course. Visiting `/admin` returns 403.
 7. Sign in as `admin` for the admin area: users, categories, and courses.
+8. Sign in as `student3`. On **Courses**, join Data Privacy Basics with one click and Workplace
+   Safety with the code `SAFETY-2026`.
 
 ## Scripts
 

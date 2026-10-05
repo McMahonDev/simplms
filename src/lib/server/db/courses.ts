@@ -1,12 +1,17 @@
-import { and, asc, eq, ilike, or, sql } from 'drizzle-orm';
+import { createHash, timingSafeEqual } from 'node:crypto';
+import { and, asc, eq, getTableColumns, ilike, or, sql } from 'drizzle-orm';
 import { db } from './index.js';
-import { category, course, enrollment, scormPackage } from './schema.js';
+import { type EnrollmentMethod, category, course, enrollment, scormPackage } from './schema.js';
 import { uniqueSlug } from './slugs.js';
 import { likeTerm } from './utils.js';
 
+// Everything but the enrollment key, which is only read through getEnrollmentKey.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const { enrollmentKey: _enrollmentKey, ...courseColumns } = getTableColumns(course);
+
 export async function getCourseBySlug(slug: string) {
 	const [row] = await db
-		.select({ course, categoryName: category.name })
+		.select({ course: courseColumns, categoryName: category.name })
 		.from(course)
 		.innerJoin(category, eq(category.id, course.categoryId))
 		.where(eq(course.slug, slug))
@@ -37,7 +42,7 @@ export async function listCoursesForAdmin(filters: CourseFilters = {}) {
 			slug: course.slug,
 			visible: course.visible,
 			categoryName: category.name,
-			students: sql<number>`(select count(*)::int from ${enrollment} where ${enrollment.courseId} = ${course.id} and ${enrollment.role} = 'student')`,
+			students: sql<number>`(select count(*)::int from ${enrollment} where ${enrollment.courseId} = ${course.id} and ${enrollment.role} = 'student' and ${enrollment.status} = 'active')`,
 			packages: sql<number>`(select count(*)::int from ${scormPackage} where ${scormPackage.courseId} = ${course.id})`
 		})
 		.from(course)
@@ -56,6 +61,7 @@ export async function listCoursesWithEnrollment(userId: string) {
 			summary: course.summary,
 			visible: course.visible,
 			categoryId: course.categoryId,
+			enrollmentMethod: course.enrollmentMethod,
 			enrollmentRole: enrollment.role,
 			enrollmentStatus: enrollment.status
 		})
@@ -89,6 +95,33 @@ export async function updateCourse(id: string, input: CourseInput) {
 		.where(eq(course.id, id))
 		.returning();
 	return row;
+}
+
+/** The course's enrollment key, for teachers and for checking a learner's code. */
+export async function getEnrollmentKey(id: string) {
+	const [row] = await db
+		.select({ key: course.enrollmentKey })
+		.from(course)
+		.where(eq(course.id, id))
+		.limit(1);
+	return row?.key ?? null;
+}
+
+/** True when the code a learner typed matches the course's key (case-sensitive, trimmed). */
+export async function checkEnrollmentKey(id: string, attempt: string) {
+	const key = await getEnrollmentKey(id);
+	if (!key) return false;
+	// Hash both sides so the comparison takes the same time whatever the lengths.
+	const digest = (s: string) => createHash('sha256').update(s.trim()).digest();
+	return timingSafeEqual(digest(key), digest(attempt));
+}
+
+/** Sets how people join the course. The key is kept only for the 'key' method. */
+export async function setEnrollmentMethod(id: string, method: EnrollmentMethod, key?: string) {
+	await db
+		.update(course)
+		.set({ enrollmentMethod: method, enrollmentKey: method === 'key' ? key : null })
+		.where(eq(course.id, id));
 }
 
 /** Deletes the course; enrollments, packages, and attempts cascade. Returns package ids. */

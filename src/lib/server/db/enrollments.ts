@@ -1,9 +1,25 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, ilike, or, sql } from 'drizzle-orm';
 import { db } from './index.js';
 import { type EnrollmentRole, type EnrollmentStatus, enrollment, user } from './schema.js';
-import { isUniqueViolation } from './utils.js';
+import { isUniqueViolation, likeTerm } from './utils.js';
 
-export async function listEnrollments(courseId: string) {
+export type EnrollmentFilters = {
+	q?: string;
+	role?: EnrollmentRole;
+	status?: EnrollmentStatus;
+};
+
+/** A course's enrollments, teachers first, optionally filtered by name/email, role, and status. */
+export async function listEnrollments(courseId: string, filters: EnrollmentFilters = {}) {
+	const conditions = [
+		eq(enrollment.courseId, courseId),
+		filters.q
+			? or(ilike(user.name, likeTerm(filters.q)), ilike(user.email, likeTerm(filters.q)))
+			: undefined,
+		filters.role ? eq(enrollment.role, filters.role) : undefined,
+		filters.status ? eq(enrollment.status, filters.status) : undefined
+	];
+
 	return db
 		.select({
 			id: enrollment.id,
@@ -16,8 +32,21 @@ export async function listEnrollments(courseId: string) {
 		})
 		.from(enrollment)
 		.innerJoin(user, eq(user.id, enrollment.userId))
-		.where(eq(enrollment.courseId, courseId))
+		.where(and(...conditions))
 		.orderBy(sql`${enrollment.role} = 'student'`, asc(user.name));
+}
+
+/** Headline counts for a course's enrollment page, ignoring any filters. */
+export async function countEnrollments(courseId: string) {
+	const [row] = await db
+		.select({
+			students: sql<number>`count(*) filter (where ${enrollment.role} = 'student' and ${enrollment.status} = 'active')::int`,
+			teachers: sql<number>`count(*) filter (where ${enrollment.role} = 'teacher' and ${enrollment.status} = 'active')::int`,
+			suspended: sql<number>`count(*) filter (where ${enrollment.status} = 'suspended')::int`
+		})
+		.from(enrollment)
+		.where(eq(enrollment.courseId, courseId));
+	return row;
 }
 
 export async function findUserIdByEmail(email: string) {

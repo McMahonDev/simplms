@@ -55,6 +55,12 @@ export const category = pgTable(
 	(t) => [index('category_parent_idx').on(t.parentId)]
 );
 
+/**
+ * How people join a course: only when staff assign them (manual), by themselves (open),
+ * or by themselves with a code from the teacher (key).
+ */
+export const enrollmentMethod = pgEnum('enrollment_method', ['manual', 'open', 'key']);
+
 export const course = pgTable(
 	'course',
 	{
@@ -67,6 +73,9 @@ export const course = pgTable(
 		slug: text('slug').notNull().unique(),
 		summary: text('summary').notNull().default(''),
 		visible: boolean('visible').notNull().default(true),
+		enrollmentMethod: enrollmentMethod('enrollment_method').notNull().default('manual'),
+		// Set only while enrollmentMethod is 'key'. Never send this to learners.
+		enrollmentKey: text('enrollment_key'),
 		// Keep the course if its creator is deleted.
 		createdBy: uuid('created_by').references(() => user.id, { onDelete: 'set null' }),
 		...timestamps()
@@ -161,6 +170,7 @@ export type User = typeof user.$inferSelect;
 export type Category = typeof category.$inferSelect;
 export type Course = typeof course.$inferSelect;
 export type Enrollment = typeof enrollment.$inferSelect;
+export type EnrollmentMethod = (typeof enrollmentMethod.enumValues)[number];
 export type EnrollmentRole = (typeof enrollmentRole.enumValues)[number];
 export type EnrollmentStatus = (typeof enrollmentStatus.enumValues)[number];
 export type ScormPackage = typeof scormPackage.$inferSelect;

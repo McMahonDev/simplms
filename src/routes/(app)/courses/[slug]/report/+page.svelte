@@ -22,7 +22,10 @@
 
 	{#if data.rows.length === 0}
 		<EmptyState title="No students are enrolled">
-			<p>Enroll learners on the <a href="/courses/{data.course.slug}/manage">manage page</a>.</p>
+			<p>
+				Enroll learners on the <a href="/courses/{data.course.slug}/enrollments">enrollments page</a
+				>.
+			</p>
 		</EmptyState>
 	{:else}
 		<p class="muted">

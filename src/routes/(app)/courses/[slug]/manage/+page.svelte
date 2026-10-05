@@ -15,10 +15,6 @@
 			resultFor(form, 'renamePackage')
 	);
 	let uploading = $state(false);
-	const enrolled = $derived(resultFor(form, 'enroll'));
-	const enrollmentResult = $derived(
-		resultFor(form, 'updateEnrollment') ?? resultFor(form, 'unenroll')
-	);
 </script>
 
 <svelte:head><title>Manage {data.course.title} · SimpLMS</title></svelte:head>
@@ -175,101 +171,10 @@
 	{#if data.caps['course:enrollments:manage']}
 		<section class="card stack" aria-labelledby="enrollments-heading">
 			<h2 id="enrollments-heading">Enrollments</h2>
-
-			<form method="POST" action="?/enroll" use:enhance class="enroll-form">
-				<label>
-					Email
-					<input
-						type="email"
-						name="email"
-						required
-						autocomplete="off"
-						placeholder="learner@example.com"
-						value={enrolled && !enrolled.ok ? (enrolled.values?.email ?? '') : ''}
-					/>
-					<FieldError errors={enrolled?.errors?.email} />
-				</label>
-				<label>
-					Role
-					<select name="role">
-						<option value="student">Student</option>
-						<option value="teacher" selected={enrolled?.values?.role === 'teacher'}>Teacher</option>
-					</select>
-				</label>
-				<button type="submit">Enroll</button>
-			</form>
-			{#if enrolled?.message}
-				<p class="alert {enrolled.ok ? 'success' : 'error'}" role="status">{enrolled.message}</p>
-			{/if}
-			{#if enrollmentResult?.message && !enrollmentResult.ok}
-				<p class="alert error" role="alert">{enrollmentResult.message}</p>
-			{/if}
-
-			{#if data.enrollments.length === 0}
-				<EmptyState title="Nobody is enrolled yet">
-					<p>Add learners and teachers by email above.</p>
-				</EmptyState>
-			{:else}
-				<div class="table-wrap">
-					<table>
-						<thead>
-							<tr>
-								<th scope="col">Person</th>
-								<th scope="col">Role and status</th>
-								<th scope="col"><span class="visually-hidden">Remove</span></th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each data.enrollments as e (e.id)}
-								<tr class:suspended={e.status === 'suspended'}>
-									<td>
-										<div>
-											{e.name}{#if e.userId === data.currentUserId}
-												<span class="muted you">(you)</span>{/if}
-										</div>
-										<div class="muted email">{e.email}</div>
-									</td>
-									<td>
-										<form method="POST" action="?/updateEnrollment" use:enhance class="cluster">
-											<input type="hidden" name="enrollmentId" value={e.id} />
-											<label>
-												<span class="visually-hidden">Role for {e.name}</span>
-												<select name="role">
-													<option value="student" selected={e.role === 'student'}>Student</option>
-													<option value="teacher" selected={e.role === 'teacher'}>Teacher</option>
-												</select>
-											</label>
-											<label>
-												<span class="visually-hidden">Status for {e.name}</span>
-												<select name="status">
-													<option value="active" selected={e.status === 'active'}>Active</option>
-													<option value="suspended" selected={e.status === 'suspended'}
-														>Suspended</option
-													>
-												</select>
-											</label>
-											<button type="submit" class="secondary small">
-												Save <span class="visually-hidden">changes for {e.name}</span>
-											</button>
-											{#if resultFor(form, 'updateEnrollment', e.id)?.ok}
-												<span class="badge success" role="status">Saved</span>
-											{/if}
-										</form>
-									</td>
-									<td class="remove">
-										<form method="POST" action="?/unenroll" use:enhance>
-											<input type="hidden" name="enrollmentId" value={e.id} />
-											<button type="submit" class="secondary small">
-												Remove <span class="visually-hidden">{e.name}</span>
-											</button>
-										</form>
-									</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
-			{/if}
+			<p>
+				Add, suspend, and remove learners and teachers on the
+				<a href="/courses/{data.course.slug}/enrollments">enrollments page</a>.
+			</p>
 		</section>
 	{/if}
 
@@ -312,17 +217,6 @@
 		gap: var(--space-xs);
 		align-self: end;
 		padding-block-end: var(--space-xs);
-	}
-
-	.enroll-form {
-		display: grid;
-		gap: var(--space-s);
-		grid-template-columns: 1fr;
-		align-items: end;
-
-		@media (min-width: 40rem) {
-			grid-template-columns: 1fr 10rem auto;
-		}
 	}
 
 	.upload-form {
@@ -391,26 +285,6 @@
 
 	.grow {
 		flex: 1 1 14rem;
-	}
-
-	.you {
-		margin-inline-start: var(--space-2xs);
-	}
-
-	.email {
-		font-size: var(--text-xs);
-	}
-
-	tr.suspended td:first-child {
-		opacity: 0.65;
-	}
-
-	td select {
-		width: auto;
-	}
-
-	.remove {
-		text-align: right;
 	}
 
 	.danger-zone {

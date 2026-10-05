@@ -39,8 +39,16 @@ Choices made where the spec was ambiguous or the tooling forced a deviation. New
 ## Courses and enrollments
 
 - **Browsing vs. opening a course.** `/courses` lists every visible course so learners can see
-  what exists, but only enrolled users (and staff) can open one. Others see "Not enrolled. Ask a
-  teacher to add you." Self-enrollment is out of scope.
+  what exists, but only enrolled users (and staff) can open one.
+- **Enrollment methods** are set per course on its Enrollments page: _assigned only_ (the
+  default; staff add people), _open_ (anyone signed in can join), or _enrollment code_ (join by
+  typing a code the teacher shares). Joining always creates a normal student enrollment, so
+  self-enrolled learners appear in reports and can be suspended like anyone else. People with
+  any enrollment, including a suspended one, can't rejoin by themselves, and hidden courses
+  can't be joined.
+- **Enrollment codes are stored in plain text** so teachers can see and share them, like Moodle.
+  They're excluded from the course query every page uses and only read by the Enrollments page
+  and the join check, which compares in constant time. Wrong guesses aren't rate limited yet.
 - **Teachers edit all course details**, including category and visibility, because the permission
   table grants them "Edit course details". Only admins and managers can delete a course.
 - **Suspended enrollments grant nothing**, for teachers and students alike.
