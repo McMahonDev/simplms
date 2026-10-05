@@ -274,6 +274,20 @@ export const notificationPreference = pgTable(
 );
 
 /**
+ * One counted try against a rate limit (see rate-limit.ts). `key` names the limit and who it
+ * applies to, e.g. "enroll-key:user:<userId>:<courseId>". Old rows are pruned by a job.
+ */
+export const rateLimitHit = pgTable(
+	'rate_limit_hit',
+	{
+		id: id(),
+		key: text('key').notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+	},
+	(t) => [index().on(t.key, t.createdAt)]
+);
+
+/**
  * Scheduled jobs and their last run. A server claims a due job by setting locked_until, so
  * only one instance runs it at a time (see jobs/runner.ts).
  */

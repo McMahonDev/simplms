@@ -5,6 +5,7 @@
 import { courseReminders } from './course-reminders.js';
 import { deliverEmail } from './deliver-email.js';
 import { pruneNotifications } from './prune-notifications.js';
+import { pruneRateLimits } from './prune-rate-limits.js';
 import type { Job } from './types.js';
 
-export const jobs: Job[] = [deliverEmail, courseReminders, pruneNotifications];
+export const jobs: Job[] = [deliverEmail, courseReminders, pruneNotifications, pruneRateLimits];

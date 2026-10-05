@@ -48,7 +48,14 @@ Choices made where the spec was ambiguous or the tooling forced a deviation. New
   can't be joined.
 - **Enrollment codes are stored in plain text** so teachers can see and share them, like Moodle.
   They're excluded from the course query every page uses and only read by the Enrollments page
-  and the join check, which compares in constant time. Wrong guesses aren't rate limited yet.
+  and the join check, which compares in constant time.
+- **Code guesses are rate limited**: 5 per learner per course and 30 per IP address (across
+  courses, so extra accounts don't help), within 15 minutes. Each try is counted before the code
+  is checked, inside a transaction holding a Postgres advisory lock per limit key, so a burst of
+  parallel requests is counted one at a time (an e2e test fires 20 at once; exactly 5 are
+  checked). Refused tries aren't counted, and a correct code clears the learner's count. The
+  table (`rate_limit_hit`) and `consumeRateLimit` are generic for future limits; a job prunes
+  rows older than a day.
 - **Teachers edit all course details**, including category and visibility, because the permission
   table grants them "Edit course details". Only admins and managers can delete a course.
 - **Suspended enrollments grant nothing**, for teachers and students alike.

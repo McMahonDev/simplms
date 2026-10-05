@@ -1,7 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const PORT = 4173;
-const baseURL = `http://localhost:${PORT}`;
+// 127.0.0.1, not localhost: Playwright's request client (page.request) can stall ~10s opening
+// a connection to "localhost" on some setups (seen on WSL), which breaks timing-sensitive tests.
+const baseURL = `http://127.0.0.1:${PORT}`;
 
 // The e2e run uses its own database and storage folder (see scripts/e2e-prepare.ts).
 const DEV_DATABASE_URL =
