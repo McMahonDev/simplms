@@ -36,7 +36,11 @@ export const envSchema = {
 	/** Exposed in bytes, configured in MB. */
 	SCORM_MAX_UPLOAD_MB: megabytes(500),
 	SCORM_MAX_UNCOMPRESSED_MB: megabytes(2000),
-	SCORM_MAX_FILES: positiveInt(20000)
+	SCORM_MAX_FILES: positiveInt(20000),
+	/** Run scheduled jobs inside the app server (see src/lib/server/jobs). */
+	JOBS_SCHEDULER: booleanString.default(true),
+	/** Bearer token for POST /api/jobs/run (external cron). Unset disables the endpoint. */
+	CRON_SECRET: z.string().min(16).optional()
 } as const;
 
 export const envObjectSchema = z.object(envSchema);

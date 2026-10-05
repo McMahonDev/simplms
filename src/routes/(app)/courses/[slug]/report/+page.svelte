@@ -1,10 +1,12 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import StatusBadge from '#lib/components/StatusBadge.svelte';
 	import { formatDateTime, formatDuration } from '#lib/format.js';
+	import { resultFor } from '#lib/forms.js';
 	import type { PageProps } from './$types';
 
-	let { data }: PageProps = $props();
+	let { data, form }: PageProps = $props();
 
 	const completedCount = $derived(
 		data.rows.filter((r) => r.progress.total > 0 && r.progress.completed === r.progress.total)
@@ -87,8 +89,23 @@
 									{#if cell.attempt?.scoreRaw != null}
 										<span class="score">Score {cell.attempt.scoreRaw}</span>
 									{/if}
-									{#if cell.attemptCount > 1}
-										<span class="score">{cell.attemptCount} attempts</span>
+									{#if cell.attemptCount > 1 || cell.attemptsAllowed}
+										<span class="score">
+											{cell.attemptCount}{#if cell.attemptsAllowed}&nbsp;of {cell.attemptsAllowed}{/if}
+											attempt{cell.attemptCount === 1 && !cell.attemptsAllowed ? '' : 's'}
+										</span>
+									{/if}
+									{#if resultFor(form, 'grantAttempt', `${data.packages[i].id}:${r.userId}`)?.ok}
+										<span class="badge success" role="status">Granted</span>
+									{:else if data.canGrant && cell.outOfAttempts}
+										<form method="POST" action="?/grantAttempt" use:enhance>
+											<input type="hidden" name="packageId" value={data.packages[i].id} />
+											<input type="hidden" name="userId" value={r.userId} />
+											<button type="submit" class="secondary small grant">
+												Grant attempt
+												<span class="visually-hidden">to {r.name} on {data.packages[i].title}</span>
+											</button>
+										</form>
 									{/if}
 								</td>
 							{/each}
@@ -141,6 +158,11 @@
 		display: block;
 		font-size: var(--text-xs);
 		color: var(--color-text-muted);
+	}
+
+	.grant {
+		margin-block-start: var(--space-3xs);
+		white-space: nowrap;
 	}
 
 	.nowrap {

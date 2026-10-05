@@ -18,6 +18,7 @@ import {
 	text,
 	timestamp,
 	unique,
+	uniqueIndex,
 	uuid,
 	boolean
 } from 'drizzle-orm/pg-core';
@@ -195,6 +196,70 @@ export const scormAttempt = pgTable(
 	]
 );
 
+/** Extra attempts a teacher granted one learner on one activity, on top of its limit. */
+export const attemptGrant = pgTable(
+	'attempt_grant',
+	{
+		packageId: uuid('package_id')
+			.notNull()
+			.references(() => scormPackage.id, { onDelete: 'cascade' }),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		extraAttempts: integer('extra_attempts').notNull().default(0),
+		...timestamps()
+	},
+	(t) => [primaryKey({ columns: [t.packageId, t.userId] })]
+);
+
+/**
+ * In-app notifications. Each row is one message to one person. Other channels (email, push)
+ * would deliver from these rows later, tracking their own sent state.
+ */
+export const notification = pgTable(
+	'notification',
+	{
+		id: id(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		/** What kind of event, e.g. "enrollment.added" (see notifications/types.ts). */
+		type: text('type').notNull(),
+		title: text('title').notNull(),
+		body: text('body').notNull().default(''),
+		/** Same-origin path to open when the notification is clicked. */
+		link: text('link'),
+		/**
+		 * Stops the same notification being created twice, e.g. a weekly reminder.
+		 * Unique per user when set.
+		 */
+		dedupeKey: text('dedupe_key'),
+		readAt: timestamp('read_at', { withTimezone: true }),
+		...timestamps()
+	},
+	(t) => [
+		index().on(t.userId, t.createdAt),
+		uniqueIndex('notification_user_dedupe_uq')
+			.on(t.userId, t.dedupeKey)
+			.where(sql`${t.dedupeKey} is not null`)
+	]
+);
+
+/**
+ * Scheduled jobs and their last run. A server claims a due job by setting locked_until, so
+ * only one instance runs it at a time (see jobs/runner.ts).
+ */
+export const job = pgTable('job', {
+	name: text('name').primaryKey(),
+	nextRunAt: timestamp('next_run_at', { withTimezone: true }).notNull().defaultNow(),
+	lockedUntil: timestamp('locked_until', { withTimezone: true }),
+	lastStartedAt: timestamp('last_started_at', { withTimezone: true }),
+	lastFinishedAt: timestamp('last_finished_at', { withTimezone: true }),
+	lastStatus: text('last_status').$type<'ok' | 'error'>(),
+	/** A short summary of what the run did, or the error message. */
+	lastResult: text('last_result')
+});
+
 export type User = typeof user.$inferSelect;
 export type Category = typeof category.$inferSelect;
 export type Course = typeof course.$inferSelect;
@@ -203,6 +268,7 @@ export type EnrollmentMethod = (typeof enrollmentMethod.enumValues)[number];
 export type EnrollmentRole = (typeof enrollmentRole.enumValues)[number];
 export type EnrollmentStatus = (typeof enrollmentStatus.enumValues)[number];
 export type ScormPackage = typeof scormPackage.$inferSelect;
+export type Notification = typeof notification.$inferSelect;
 export type CompletionRule = (typeof completionRule.enumValues)[number];
 export type ScormVersion = (typeof scormVersion.enumValues)[number];
 export type ScormAttempt = typeof scormAttempt.$inferSelect;

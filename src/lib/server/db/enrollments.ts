@@ -1,6 +1,6 @@
 import { and, asc, eq, ilike, or, sql } from 'drizzle-orm';
 import { db } from './index.js';
-import { type EnrollmentRole, type EnrollmentStatus, enrollment, user } from './schema.js';
+import { type EnrollmentRole, type EnrollmentStatus, course, enrollment, user } from './schema.js';
 import { isUniqueViolation, likeTerm } from './utils.js';
 
 export type EnrollmentFilters = {
@@ -102,4 +102,21 @@ export async function listStudents(courseId: string) {
 		.innerJoin(user, eq(user.id, enrollment.userId))
 		.where(and(eq(enrollment.courseId, courseId), eq(enrollment.role, 'student')))
 		.orderBy(asc(user.name));
+}
+
+/** Every active student enrollment in a visible course, for scheduled jobs. */
+export async function activeStudentEnrollments() {
+	return db
+		.select({
+			userId: enrollment.userId,
+			enrolledAt: enrollment.createdAt,
+			courseId: course.id,
+			title: course.title,
+			slug: course.slug
+		})
+		.from(enrollment)
+		.innerJoin(course, eq(course.id, enrollment.courseId))
+		.where(
+			and(eq(enrollment.role, 'student'), eq(enrollment.status, 'active'), eq(course.visible, true))
+		);
 }

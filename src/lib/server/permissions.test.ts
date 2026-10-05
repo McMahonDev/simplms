@@ -95,6 +95,11 @@ const table: [row: string, capability: Capability, expected: Record<Actor, boole
 		{ admin: true, manager: true, teacher: true, student: true }
 	],
 	[
+		'Run and inspect scheduled jobs',
+		'jobs:manage',
+		{ admin: true, manager: false, teacher: false, student: false }
+	],
+	[
 		'Reach the admin area',
 		'admin:access',
 		{ admin: true, manager: true, teacher: false, student: false }

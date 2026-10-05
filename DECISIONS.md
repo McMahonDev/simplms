@@ -112,8 +112,8 @@ Choices made where the spec was ambiguous or the tooling forced a deviation. New
 - **Any attempt can complete an activity.** The course page and report show the first attempt
   that met the rule (else the latest), so a worse retake never undoes a pass.
 - **Attempt limits are per activity** (blank = unlimited) and checked on the server when a new
-  attempt is started. Once a learner has used them all without completing, a teacher can raise
-  the limit; there's no per-learner override yet.
+  attempt is started. When a learner runs out without completing, a teacher can **grant one more
+  attempt** from the report (stored per learner in `attempt_grant`, added on top of the limit).
 - **Rules are applied when reading, not stored.** Changing a rule re-grades every learner's
   attempts immediately; nothing is recalculated or migrated. All rules live in
   `src/lib/server/completion.ts`, shared by the course page, dashboard, report, and launch guard.
@@ -127,6 +127,30 @@ Choices made where the spec was ambiguous or the tooling forced a deviation. New
   until the new prerequisites are met.
 - Not built yet: date-based availability, course-level completion criteria (e.g. "only these
   activities count"), and grade aggregation across attempts.
+
+## Notifications and scheduled jobs
+
+- **Notifications are rows, not deliveries.** `notification` holds one message for one person,
+  shown in the app (header count and `/notifications`). Email or push would be added as a job
+  that delivers unsent rows and records its own sent state, without changing call sites.
+  Message text lives in typed builders in `src/lib/server/notifications.ts`.
+- **Sent today:** a teacher enrolling someone, a teacher granting an extra attempt, and a weekly
+  reminder for unfinished courses left idle 7 days. Self-enrollment doesn't notify (the learner
+  did it).
+- **`dedupe_key`** (unique per user when set) makes repeatable notifications idempotent, e.g.
+  one reminder per course per ISO week, even if the job runs twice.
+- **Notifying never fails the action.** Call sites ignore notify errors; the enrollment or grant
+  still succeeds.
+- **Jobs run inside the app server.** The `init` hook starts a one-minute timer
+  (`JOBS_SCHEDULER`, on by default). Each job has a row in `job`; a server claims a due job with
+  a single `UPDATE … SET locked_until` so several instances never run it twice, and a crashed run
+  is retried after the 15-minute lock expires. Jobs reuse the app's database module, which reads
+  config through SvelteKit, so there's no standalone CLI runner.
+- **External cron:** with `JOBS_SCHEDULER=false`, call `POST /api/jobs/run` with
+  `Authorization: Bearer $CRON_SECRET` (disabled unless the secret is set). Admins can see last
+  runs and run a job now at Admin › Jobs.
+- The reminder job loads every active student enrollment in one pass, which is fine for a demo
+  but should be batched by course for large sites.
 
 ## Users
 

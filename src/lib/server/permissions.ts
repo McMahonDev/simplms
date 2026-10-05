@@ -26,7 +26,8 @@ export const SITE_CAPABILITIES = [
 	'users:view',
 	'users:manage',
 	'categories:manage',
-	'courses:create'
+	'courses:create',
+	'jobs:manage'
 ] as const;
 
 /** Capabilities that apply within one course. */
@@ -46,7 +47,7 @@ export type Capability = SiteCapability | CourseCapability;
 const SITE_GRANTS: Record<SiteRole, ReadonlySet<Capability>> = {
 	admin: new Set([...SITE_CAPABILITIES, ...COURSE_CAPABILITIES]),
 	manager: new Set<Capability>([
-		...SITE_CAPABILITIES.filter((c) => c !== 'users:manage'),
+		...SITE_CAPABILITIES.filter((c) => c !== 'users:manage' && c !== 'jobs:manage'),
 		...COURSE_CAPABILITIES
 	]),
 	user: new Set()

@@ -44,9 +44,10 @@ export const load: PageServerLoad = async (event) => {
 		activity: { id: pkg.id, title: pkg.title, version: pkg.version },
 		attempt: {
 			number: attempt.attemptNumber,
-			max: pkg.maxAttempts,
+			max: activity.attemptsAllowed,
 			review,
-			canRetake: review && (pkg.maxAttempts == null || attemptsUsed < pkg.maxAttempts)
+			canRetake:
+				review && (activity.attemptsAllowed == null || attemptsUsed < activity.attemptsAllowed)
 		},
 		launchUrl: `/scorm/content/${pkg.id}/${encodedHref}`,
 		commitUrl: `/api/scorm/attempts/${attempt.id}/commit?session=${sessionId}`,

@@ -73,15 +73,15 @@ export function attemptsAllowed(maxAttempts: number | null, granted = 0): number
 
 /**
  * Whether a learner may start another attempt: their latest one is finished and they haven't
- * used up the activity's limit (null means unlimited). With no attempts, they just start #1.
+ * used up their allowance (null means unlimited). With no attempts, they just start #1.
  */
 export function canStartNewAttempt(
 	attempts: Pick<AttemptLike, 'completionStatus' | 'successStatus'>[],
-	maxAttempts: number | null
+	allowed: number | null
 ): boolean {
 	const latest = attempts.at(-1);
 	if (!latest || !isFinished(latest)) return false;
-	return maxAttempts == null || attempts.length < maxAttempts;
+	return allowed == null || attempts.length < allowed;
 }
 
 /**
