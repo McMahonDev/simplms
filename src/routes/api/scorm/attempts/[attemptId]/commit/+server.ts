@@ -9,6 +9,7 @@
  */
 import { error, json } from '@sveltejs/kit';
 import { z } from 'zod';
+import { isFinished } from '#lib/server/completion.js';
 import { getAttemptForCommit, saveCommit } from '#lib/server/db/attempts.js';
 import { isSameOrigin } from '#lib/server/guards.js';
 import { can } from '#lib/server/permissions.js';
@@ -49,6 +50,12 @@ export const POST: RequestHandler = async ({ params, url, request, locals }) => 
 	}
 	const parsed = commitSchema.safeParse(body);
 	if (!parsed.success) return failure(400);
+
+	// A finished attempt reopened later is in review mode: accept the commit so the SCO carries
+	// on, but keep the recorded result. The session that finished it can still commit.
+	if (isFinished(attempt) && attempt.sessionId !== sessionId.data) {
+		return json({ result: true, errorCode: 0 });
+	}
 
 	const { cmi } = parsed.data;
 	await saveCommit(attempt.id, sessionId.data, cmi, normalizeCommit(attempt.version, cmi));

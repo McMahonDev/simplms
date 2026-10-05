@@ -78,10 +78,17 @@
 									{#if cell.locked && !cell.attempt}
 										<span class="badge">Locked</span>
 									{:else}
-										<StatusBadge attempt={cell.attempt} complete={cell.complete} />
+										<StatusBadge
+											attempt={cell.attempt}
+											complete={cell.complete}
+											result={cell.result}
+										/>
 									{/if}
 									{#if cell.attempt?.scoreRaw != null}
 										<span class="score">Score {cell.attempt.scoreRaw}</span>
+									{/if}
+									{#if cell.attemptCount > 1}
+										<span class="score">{cell.attemptCount} attempts</span>
 									{/if}
 								</td>
 							{/each}

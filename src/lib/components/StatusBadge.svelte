@@ -1,11 +1,16 @@
 <script lang="ts">
-	type Attempt = { completionStatus: string; successStatus: string } | null | undefined;
+	type Attempt = { completionStatus: string } | null | undefined;
 
-	/** `complete` comes from the activity's completion rule (see completion.ts). */
-	let { attempt, complete }: { attempt: Attempt; complete: boolean } = $props();
+	/**
+	 * `complete` and `result` come from the activity's rules (see completion.ts), so a passing
+	 * score set on the activity wins over the package's own pass mark.
+	 */
+	let {
+		attempt,
+		complete,
+		result = null
+	}: { attempt: Attempt; complete: boolean; result?: 'passed' | 'failed' | null } = $props();
 
-	// Completion follows the activity's rule; pass/fail is shown as well when the SCO reported it
-	// (SCORM 2004 tracks them separately, and 1.2 statuses are mapped onto both).
 	const completion = $derived.by(() => {
 		if (complete) return { label: 'Completed', tone: 'success' };
 		if (!attempt || attempt.completionStatus === 'not attempted') {
@@ -15,8 +20,8 @@
 	});
 
 	const success = $derived.by(() => {
-		if (attempt?.successStatus === 'passed') return { label: 'Passed', tone: 'success' };
-		if (attempt?.successStatus === 'failed') return { label: 'Failed', tone: 'danger' };
+		if (result === 'passed') return { label: 'Passed', tone: 'success' };
+		if (result === 'failed') return { label: 'Failed', tone: 'danger' };
 		return null;
 	});
 </script>

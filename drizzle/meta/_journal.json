@@ -29,6 +29,13 @@
 			"when": 1791210085400,
 			"tag": "0003_activity_completion",
 			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "7",
+			"when": 1791211478108,
+			"tag": "0004_attempt_limits",
+			"breakpoints": true
 		}
 	]
 }

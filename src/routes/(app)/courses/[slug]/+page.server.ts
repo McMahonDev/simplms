@@ -3,10 +3,11 @@ import { z } from 'zod';
 import { describeCriteria } from '#lib/server/completion.js';
 import { findCourse, requireSelfEnroll } from '#lib/server/course-context.js';
 import { checkEnrollmentKey } from '#lib/server/db/courses.js';
+import { startNewAttempt } from '#lib/server/db/attempts.js';
 import { EnrollmentError, enrollUser } from '#lib/server/db/enrollments.js';
 import { packagesWithProgress } from '#lib/server/db/progress.js';
 import { can, capabilitiesFor } from '#lib/server/permissions.js';
-import { formError, parseForm } from '#lib/server/validation.js';
+import { formError, formFields, parseForm } from '#lib/server/validation.js';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
@@ -40,7 +41,46 @@ const joinSchema = z.object({
 	key: z.string().trim().max(100).optional()
 });
 
+const retakeSchema = z.object({ packageId: formFields.uuid() });
+
 export const actions: Actions = {
+	retake: async (event) => {
+		const { course, user } = await findCourse(event);
+		if (!(await can(user, 'scorm:launch', course.id))) {
+			return fail(403, {
+				action: 'retake',
+				...formError('You do not have access to this course.')
+			});
+		}
+		const parsed = parseForm(retakeSchema, await event.request.formData());
+		const activity = parsed.ok
+			? (await packagesWithProgress(course.id, user.id)).find((a) => a.id === parsed.data.packageId)
+			: undefined;
+		if (!activity) return fail(404, { action: 'retake', ...formError('Activity not found.') });
+
+		const staff = await can(user, 'course:edit', course.id);
+		if (activity.lockedBy.length > 0 && !staff) {
+			return fail(403, {
+				action: 'retake',
+				id: activity.id,
+				...formError('This activity is locked.')
+			});
+		}
+		if (!activity.canRetake) {
+			return fail(400, {
+				action: 'retake',
+				id: activity.id,
+				...formError(
+					activity.finished
+						? 'You have used all your attempts.'
+						: 'Finish your current attempt first.'
+				)
+			});
+		}
+		await startNewAttempt(activity.id, user.id);
+		redirect(303, `/courses/${course.slug}/scorm/${activity.id}`);
+	},
+
 	join: async (event) => {
 		const { course, user } = await findCourse(event);
 		if (await can(user, 'course:view', course.id)) redirect(303, `/courses/${course.slug}`);

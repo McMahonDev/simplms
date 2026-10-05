@@ -134,7 +134,9 @@ describe('buildLaunchCmi', () => {
 			student_id: 'u1',
 			student_name: 'Sam Student',
 			entry: 'resume',
-			total_time: '0000:02:00.00'
+			total_time: '0000:02:00.00',
+			lesson_mode: 'normal',
+			credit: 'credit'
 		});
 		expect(cmi.suspend_data).toBe('page=4');
 		expect(cmi.interactions).toBeUndefined();
@@ -163,7 +165,16 @@ describe('buildLaunchCmi', () => {
 			learner_id: 'u1',
 			learner_name: 'Sam Student',
 			entry: 'resume',
-			total_time: 'PT0H1M1S'
+			total_time: 'PT0H1M1S',
+			mode: 'normal',
+			credit: 'credit'
 		});
+	});
+
+	it('opens a finished attempt in review mode without credit', () => {
+		const v12 = buildLaunchCmi('1.2', { core: { lesson_status: 'failed' } }, 0, learner, 'review');
+		expect(v12.cmi.core).toMatchObject({ lesson_mode: 'review', credit: 'no-credit' });
+		const v2004 = buildLaunchCmi('2004', { completion_status: 'completed' }, 0, learner, 'review');
+		expect(v2004.cmi).toMatchObject({ mode: 'review', credit: 'no-credit' });
 	});
 });

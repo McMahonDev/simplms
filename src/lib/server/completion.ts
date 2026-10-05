@@ -2,14 +2,18 @@
  * Activity completion and locking rules. Pure functions, so the course page, dashboard, report,
  * and launch guard all agree and every rule is unit-testable.
  *
- * An activity is complete when its latest attempt meets the activity's rule (viewed, completed,
- * or passed) and, if set, its minimum raw score. An activity is locked for a learner until every
- * prerequisite activity is complete.
+ * Pass/fail: when the activity has a passing score, it alone decides pass/fail (the package's own
+ * mastery score is ignored); otherwise the package's reported success status is used.
+ *
+ * An activity is complete when any attempt meets its rule: opened (viewed), completed or passed
+ * (completed), or passed. An activity is locked for a learner until every prerequisite activity
+ * is complete.
  */
 import type { CompletionRule, CompletionStatus, SuccessStatus } from './db/schema.js';
 
 export type CompletionCriteria = {
 	completionRule: CompletionRule;
+	/** Passing score for the 'passed' rule; when set it replaces the package's own pass mark. */
 	completionMinScore: number | null;
 };
 
@@ -26,19 +30,69 @@ type AttemptLike = {
 	scoreRaw: number | null;
 };
 
+/** Passed or failed for one attempt, or null while there's no verdict yet. */
+export function resultOf(
+	attempt: AttemptLike,
+	criteria: CompletionCriteria
+): 'passed' | 'failed' | null {
+	if (criteria.completionMinScore != null) {
+		if (attempt.scoreRaw == null) return null;
+		return attempt.scoreRaw >= criteria.completionMinScore ? 'passed' : 'failed';
+	}
+	return attempt.successStatus === 'unknown' ? null : attempt.successStatus;
+}
+
 export function isActivityComplete(
 	attempt: AttemptLike | null | undefined,
 	criteria: CompletionCriteria
 ): boolean {
 	if (!attempt) return false;
-	const ruleMet =
-		criteria.completionRule === 'viewed' ||
-		(criteria.completionRule === 'completed' &&
-			(attempt.completionStatus === 'completed' || attempt.successStatus === 'passed')) ||
-		(criteria.completionRule === 'passed' && attempt.successStatus === 'passed');
-	if (!ruleMet) return false;
-	if (criteria.completionMinScore == null) return true;
-	return attempt.scoreRaw != null && attempt.scoreRaw >= criteria.completionMinScore;
+	const result = resultOf(attempt, criteria);
+	switch (criteria.completionRule) {
+		case 'viewed':
+			return true;
+		case 'completed':
+			return attempt.completionStatus === 'completed' || result === 'passed';
+		case 'passed':
+			return result === 'passed';
+	}
+}
+
+/**
+ * Whether an attempt is over: the SCO reported it completed, passed, or failed. Finished attempts
+ * reopen in review mode, and a retake starts a new attempt.
+ */
+export function isFinished(attempt: Pick<AttemptLike, 'completionStatus' | 'successStatus'>) {
+	return attempt.completionStatus === 'completed' || attempt.successStatus !== 'unknown';
+}
+
+/** The activity's attempt limit plus any granted to this learner; null means unlimited. */
+export function attemptsAllowed(maxAttempts: number | null, granted = 0): number | null {
+	return maxAttempts == null ? null : maxAttempts + granted;
+}
+
+/**
+ * Whether a learner may start another attempt: their latest one is finished and they haven't
+ * used up the activity's limit (null means unlimited). With no attempts, they just start #1.
+ */
+export function canStartNewAttempt(
+	attempts: Pick<AttemptLike, 'completionStatus' | 'successStatus'>[],
+	maxAttempts: number | null
+): boolean {
+	const latest = attempts.at(-1);
+	if (!latest || !isFinished(latest)) return false;
+	return maxAttempts == null || attempts.length < maxAttempts;
+}
+
+/**
+ * The attempt to show for an activity: the first one that made it complete, otherwise the
+ * latest. `attempts` must be in attempt order.
+ */
+export function resultAttempt<A extends AttemptLike>(
+	attempts: A[],
+	criteria: CompletionCriteria
+): A | null {
+	return attempts.find((a) => isActivityComplete(a, criteria)) ?? attempts.at(-1) ?? null;
 }
 
 export type ActivityState = {
@@ -50,9 +104,11 @@ export type ActivityState = {
 /** Completion and lock state for each activity, keyed by activity id. */
 export function evaluateActivities(
 	activities: ActivityRules[],
-	attemptFor: (activityId: string) => AttemptLike | null | undefined
+	attemptsFor: (activityId: string) => AttemptLike[]
 ): Map<string, ActivityState> {
-	const complete = new Map(activities.map((a) => [a.id, isActivityComplete(attemptFor(a.id), a)]));
+	const complete = new Map(
+		activities.map((a) => [a.id, attemptsFor(a.id).some((t) => isActivityComplete(t, a))])
+	);
 	const titles = new Map(activities.map((a) => [a.id, a.title]));
 
 	return new Map(
@@ -69,16 +125,14 @@ export function evaluateActivities(
 	);
 }
 
-/** Describes a criteria setting for learners, e.g. "Pass it with a score of at least 80". */
+/** Describes a criteria setting for learners, e.g. "Score at least 80". */
 export function describeCriteria(criteria: CompletionCriteria): string {
-	const base = {
-		viewed: 'Open it',
-		completed: 'Complete it',
-		passed: 'Pass it'
-	}[criteria.completionRule];
-	return criteria.completionMinScore == null
-		? base
-		: `${base} with a score of at least ${criteria.completionMinScore}`;
+	if (criteria.completionRule === 'passed' && criteria.completionMinScore != null) {
+		return `Score at least ${criteria.completionMinScore}`;
+	}
+	return { viewed: 'Open it', completed: 'Complete it', passed: 'Pass it' }[
+		criteria.completionRule
+	];
 }
 
 /**

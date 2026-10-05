@@ -121,7 +121,10 @@
 								<a href="/courses/{data.course.slug}/scorm/{p.id}">{p.title}</a>
 								<span class="badge">SCORM {p.version}</span>
 								<span class="muted rules">
-									{p.criteria}{#if p.requiresTitles.length > 0}
+									{p.criteria}{#if p.maxAttempts}
+										· {p.maxAttempts} attempt{p.maxAttempts === 1
+											? ''
+											: 's'}{/if}{#if p.requiresTitles.length > 0}
 										· Locked until {p.requiresTitles.join(', ')}{/if}
 								</span>
 							</div>
@@ -167,8 +170,8 @@
 												>
 											</select>
 										</label>
-										<label>
-											Minimum score <span class="muted">(optional, raw score)</span>
+										<label class="passing">
+											Passing score
 											<input
 												name="completionMinScore"
 												type="number"
@@ -176,8 +179,31 @@
 												max="1000"
 												step="any"
 												inputmode="decimal"
+												placeholder="Package's own"
 												value={p.completionMinScore ?? ''}
 											/>
+											<span class="muted hint"
+												>Raw score, usually 0–100. Blank uses the package's own pass mark.</span
+											>
+										</label>
+									</fieldset>
+									<fieldset class="settings">
+										<legend>Attempts</legend>
+										<label>
+											Attempts allowed
+											<input
+												name="maxAttempts"
+												type="number"
+												min="1"
+												max="100"
+												step="1"
+												inputmode="numeric"
+												placeholder="Unlimited"
+												value={p.maxAttempts ?? ''}
+											/>
+											<span class="muted hint"
+												>A finished attempt reopens as review only. Blank for unlimited.</span
+											>
 										</label>
 									</fieldset>
 									{#if data.packages.length > 1}
@@ -368,6 +394,20 @@
 			font-weight: 600;
 			padding-inline: var(--space-2xs);
 		}
+	}
+
+	/* The passing score only applies to "passes it"; :has() keeps this working without JS. */
+	.passing {
+		display: none;
+	}
+
+	.settings:has(option[value='passed']:checked) .passing {
+		display: grid;
+	}
+
+	.hint {
+		font-size: var(--text-xs);
+		font-weight: 400;
 	}
 
 	.prereqs {

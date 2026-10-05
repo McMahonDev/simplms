@@ -75,9 +75,12 @@ Choices made where the spec was ambiguous or the tooling forced a deviation. New
   separate origin and bridge the API with scorm-again's cross-frame API.
 - **The sample packages are committed** under `fixtures/scorm/` (CC BY 3.0, Rustici Software) so
   seeding works offline.
-- **Learners always resume their latest attempt.** Relaunching restores the stored CMI even after
-  a normal (non-suspend) exit; `cmi.entry` is `resume` only when the last exit was `suspend`.
-  New attempts can be added later using `attempt_number`.
+- **Learners reopen their latest attempt.** An unfinished attempt resumes with its stored CMI;
+  `cmi.entry` is `resume` only when the last exit was `suspend`. A finished attempt (completed,
+  passed, or failed) reopens in review mode (`lesson_mode`/`mode` = `review`, `credit` =
+  `no-credit`), and the commit endpoint ignores commits from any session after the one that
+  finished it, so a reviewed quiz can't overwrite the result. Retaking means starting a new
+  attempt, up to the activity's limit (Moodle works the same way).
 - **SCORM 1.2 `failed` maps to completed/failed** (as Rustici's SCORM Engine does), so a learner
   who finished the assessment shows as complete in reports, with the failure visible.
 - **Session-aware time accumulation.** Each player page load gets a session id passed on the
@@ -99,12 +102,20 @@ Choices made where the spec was ambiguous or the tooling forced a deviation. New
 ## Completion and locking
 
 - **Completion is set per activity**: _viewed_ (launched once), _completed_ (the SCO reports
-  completed or passed; the default, and the old behavior), or _passed_. An optional minimum score
-  must also be met. Scores are the SCO's raw score (`cmi.core.score.raw` / `cmi.score.raw`),
-  usually 0–100, so a minimum only makes sense for packages that report one; an attempt with no
-  score never meets it.
+  completed or passed; the default, and the old behavior), or _passed_.
+- **A passing score replaces the package's own pass mark.** It's only offered with _passed_.
+  When set, pass/fail everywhere (badges, report, completion) comes from the score alone and the
+  SCO's `success_status` is ignored; otherwise the SCO's verdict is used. Showing both led to
+  "Completed" next to "Failed" when the package's built-in mastery score was higher than the
+  teacher's. Scores are the SCO's raw score (`cmi.core.score.raw` / `cmi.score.raw`), usually
+  0–100; an attempt with no score has no verdict.
+- **Any attempt can complete an activity.** The course page and report show the first attempt
+  that met the rule (else the latest), so a worse retake never undoes a pass.
+- **Attempt limits are per activity** (blank = unlimited) and checked on the server when a new
+  attempt is started. Once a learner has used them all without completing, a teacher can raise
+  the limit; there's no per-learner override yet.
 - **Rules are applied when reading, not stored.** Changing a rule re-grades every learner's
-  latest attempt immediately; nothing is recalculated or migrated. All rules live in
+  attempts immediately; nothing is recalculated or migrated. All rules live in
   `src/lib/server/completion.ts`, shared by the course page, dashboard, report, and launch guard.
 - **Locking is by prerequisite activities** in the same course. An activity unlocks once every
   prerequisite meets its own completion rule. Saving a prerequisite that would form a loop is

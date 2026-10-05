@@ -48,10 +48,12 @@ both SCORM 1.2 and SCORM 2004 (bundled in `fixtures/scorm/`, CC BY 3.0).
 2. Start **Golf Explained (SCORM 1.2)**, click **Next** a few times, then **Exit**.
 3. Click **Continue**. The package offers to resume and returns to the same page.
 4. Page to the end and exit. The activity shows **Completed** and the dashboard progress updates.
-5. The SCORM 2004 activity was locked until now. Repeat the steps with it.
+5. The SCORM 2004 activity was locked until now. Repeat the steps with it. Finished activities
+   reopen as **Review**; **Start new attempt** retakes them.
 6. Sign in as `teacher2`. Open Golf Fundamentals › **Report** to see completion, score, time, and
    last access. On **Manage**, upload a package (any zip from `fixtures/scorm/`), and open an
-   activity's **Settings** to change when it counts as complete or what it's locked behind. On
+   activity's **Settings** to change when it counts as complete, the passing score, how many
+   attempts are allowed, or what it's locked behind. On
    **Enrollments**, enroll a student by email, then suspend or remove them, or change how people
    join the course. Visiting `/admin` returns 403.
 7. Sign in as `admin` for the admin area: users, categories, and courses.
